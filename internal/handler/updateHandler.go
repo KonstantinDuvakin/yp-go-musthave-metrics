@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/repository"
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 )
 
-func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
+func UpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -31,7 +32,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 		}
 
 		switch metricType {
-		case "counter":
+		case models.Counter:
 			if metricName == "" {
 				http.Error(w, "not found", http.StatusNotFound)
 				return
@@ -45,7 +46,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 			storage.AddCounter(metricName, parsedValue)
 
-		case "gauge":
+		case models.Gauge:
 			if metricName == "" {
 				http.Error(w, "not found", http.StatusNotFound)
 				return

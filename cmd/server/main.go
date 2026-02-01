@@ -4,17 +4,14 @@ import (
 	"net/http"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/repository"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 )
 
 func main() {
-	storage := &repository.MemStorage{
-		Gauge:   make(map[string]float64),
-		Counter: make(map[string]int64),
-	}
+	store := storage.NewMemStorage()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc(`/update/`, handler.UpdateHandler(storage))
+	mux.HandleFunc(`/update/`, handler.UpdateHandler(store))
 
 	err := http.ListenAndServe(`:8080`, mux)
 	if err != nil {
