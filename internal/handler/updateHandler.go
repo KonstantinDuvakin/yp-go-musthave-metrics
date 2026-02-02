@@ -15,7 +15,6 @@ func UpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-
 		parts := strings.Split(r.URL.Path, "/")
 		if len(parts) != 5 {
 			http.Error(w, "invalid path", http.StatusBadRequest)
