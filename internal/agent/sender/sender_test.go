@@ -8,6 +8,7 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/go-chi/chi/v5"
 )
 
 func TestSendMetrics(t *testing.T) {
@@ -38,13 +39,17 @@ func TestSendMetrics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ms := storage.NewMemStorage()
+
+			r := chi.NewRouter()
+			r.Post("/update/{type}/{name}/{value}", handler.UpdateHandler(ms))
+
 			request := httptest.NewRequest(http.MethodPost, tt.args.url, nil)
 			w := httptest.NewRecorder()
-			ms := storage.NewMemStorage()
-			h := handler.UpdateHandler(ms)
-			h(w, request)
+
+			r.ServeHTTP(w, request)
+
 			res := w.Result()
-			t.Log("res: ", res)
 			if got := res.StatusCode; got != tt.want.code {
 				t.Errorf("SendMetrics() = %d, want %d", got, tt.want.code)
 			}

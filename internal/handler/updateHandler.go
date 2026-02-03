@@ -1,45 +1,36 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/go-chi/chi/v5"
 )
 
 func UpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		parts := strings.Split(r.URL.Path, "/")
-		if len(parts) != 5 {
-			http.Error(w, "invalid path", http.StatusBadRequest)
-			return
-		}
-
-		metricType := parts[2]
-		metricName := parts[3]
-		metricValue := parts[4]
-
+		metricType := chi.URLParam(r, "type")
+		metricName := chi.URLParam(r, "name")
+		metricValue := chi.URLParam(r, "value")
+		fmt.Printf("%s,%s,%s", metricType, metricName, metricValue)
 		if metricType == "" {
-			http.Error(w, "invalid path", http.StatusBadRequest)
+			http.Error(w, "Invalid path. Absent metric type", http.StatusBadRequest)
 			return
 		}
 
 		switch metricType {
 		case models.Counter:
 			if metricName == "" {
-				http.Error(w, "not found", http.StatusNotFound)
+				http.Error(w, "Not found counter with name "+metricName, http.StatusNotFound)
 				return
 			}
 
 			parsedValue, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
-				http.Error(w, "invalid path", http.StatusBadRequest)
+				http.Error(w, "Invalid value for counter "+metricName, http.StatusBadRequest)
 				return
 			}
 
@@ -47,19 +38,19 @@ func UpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 
 		case models.Gauge:
 			if metricName == "" {
-				http.Error(w, "not found", http.StatusNotFound)
+				http.Error(w, "Not found metric with name "+metricName, http.StatusNotFound)
 				return
 			}
 
 			parsedValue, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
-				http.Error(w, "invalid path", http.StatusBadRequest)
+				http.Error(w, "Invalid value for metric "+metricName, http.StatusBadRequest)
 				return
 			}
 
 			storage.SetGauge(metricName, parsedValue)
 		default:
-			http.Error(w, "invalid metric type", http.StatusBadRequest)
+			http.Error(w, "Invalid metric type, name or value", http.StatusBadRequest)
 			return
 		}
 
