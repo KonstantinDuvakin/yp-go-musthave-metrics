@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -15,7 +14,6 @@ func UpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 		metricType := chi.URLParam(r, "type")
 		metricName := chi.URLParam(r, "name")
 		metricValue := chi.URLParam(r, "value")
-		fmt.Printf("%s,%s,%s", metricType, metricName, metricValue)
 		if metricType == "" {
 			http.Error(w, "Invalid path. Absent metric type", http.StatusBadRequest)
 			return
