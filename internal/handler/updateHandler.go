@@ -39,7 +39,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 			parsedValue, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
-				http.Error(w, "invalid path", http.StatusNotFound)
+				http.Error(w, "invalid path", http.StatusBadRequest)
 				return
 			}
 
@@ -53,13 +53,13 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 			parsedValue, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
-				http.Error(w, "invalid path", http.StatusNotFound)
+				http.Error(w, "invalid path", http.StatusBadRequest)
 				return
 			}
 
 			storage.SetGauge(metricName, parsedValue)
 		default:
-			http.Error(w, "invalid metric type", http.StatusBadRequest)
+			http.Error(w, "invalid metric type", http.StatusNotFound)
 			return
 		}
 
