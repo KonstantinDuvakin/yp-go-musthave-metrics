@@ -39,7 +39,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 			parsedValue, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
-				http.Error(w, "invalid path", http.StatusBadRequest)
+				http.Error(w, "invalid path", http.StatusNotFound)
 				return
 			}
 
@@ -53,7 +53,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 			parsedValue, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
-				http.Error(w, "invalid path", http.StatusBadRequest)
+				http.Error(w, "invalid path", http.StatusNotFound)
 				return
 			}
 
