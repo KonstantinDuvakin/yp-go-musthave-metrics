@@ -16,6 +16,6 @@ func SendMetrics(url string) {
 	defer resp.Body.Close()
 }
 
-func UrlBuilder(metricType, name, value string) string {
+func URLBuilder(metricType, name, value string) string {
 	return fmt.Sprintf("%supdate/%s/%s/%s", serverURL, metricType, name, value)
 }

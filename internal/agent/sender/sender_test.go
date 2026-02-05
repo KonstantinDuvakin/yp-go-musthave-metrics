@@ -48,6 +48,7 @@ func TestSendMetrics(t *testing.T) {
 			if got := res.StatusCode; got != tt.want.code {
 				t.Errorf("SendMetrics() = %d, want %d", got, tt.want.code)
 			}
+			res.Body.Close()
 		})
 	}
 }
@@ -84,8 +85,8 @@ func TestUrlBuilder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := UrlBuilder(tt.args.metricType, tt.args.name, tt.args.value); got != tt.want {
-				t.Errorf("UrlBuilder() = %v, want %v", got, tt.want)
+			if got := URLBuilder(tt.args.metricType, tt.args.name, tt.args.value); got != tt.want {
+				t.Errorf("URLBuilder() = %v, want %v", got, tt.want)
 			}
 		})
 	}
