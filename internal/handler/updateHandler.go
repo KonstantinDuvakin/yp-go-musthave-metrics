@@ -17,7 +17,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 		parts := strings.Split(r.URL.Path, "/")
 		if len(parts) != 5 {
-			http.Error(w, "invalid path", http.StatusBadRequest)
+			http.Error(w, "not found resource", http.StatusNotFound)
 			return
 		}
 
@@ -59,7 +59,7 @@ func UpdateHandler(storage *repository.MemStorage) http.HandlerFunc {
 
 			storage.SetGauge(metricName, parsedValue)
 		default:
-			http.Error(w, "invalid metric type", http.StatusNotFound)
+			http.Error(w, "invalid metric type", http.StatusBadRequest)
 			return
 		}
 
