@@ -17,7 +17,7 @@ func UpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 		}
 		parts := strings.Split(r.URL.Path, "/")
 		if len(parts) != 5 {
-			http.Error(w, "invalid path", http.StatusBadRequest)
+			http.Error(w, "not found resource", http.StatusNotFound)
 			return
 		}
 
