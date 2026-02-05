@@ -13,11 +13,13 @@ import (
 
 type Agent struct {
 	storage *storage.AgentStorage
+	address string
 }
 
-func New(storage *storage.AgentStorage) *Agent {
+func New(storage *storage.AgentStorage, address *string) *Agent {
 	return &Agent{
 		storage: storage,
+		address: *address,
 	}
 }
 
@@ -35,11 +37,11 @@ func (a *Agent) Run(poll, report time.Duration) {
 		case <-reportTicker.C:
 			gauge, counter := a.storage.Snapshot()
 			for name, value := range gauge {
-				url := sender.UrlBuilder(models.Gauge, name, strconv.FormatFloat(value, 'g', -1, 64))
+				url := sender.UrlBuilder(a.address, models.Gauge, name, strconv.FormatFloat(value, 'g', -1, 64))
 				go sender.SendMetrics(url)
 			}
 			for name, value := range counter {
-				url := sender.UrlBuilder(models.Counter, name, strconv.FormatInt(value, 10))
+				url := sender.UrlBuilder(a.address, models.Counter, name, strconv.FormatInt(value, 10))
 				go sender.SendMetrics(url)
 			}
 			fmt.Println("Send")

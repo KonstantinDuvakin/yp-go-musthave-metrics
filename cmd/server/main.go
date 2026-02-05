@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"net/http"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
@@ -10,6 +12,12 @@ import (
 
 func main() {
 	store := storage.NewMemStorage()
+
+	address := flag.String("a", "localhost:8080", "set an address of a server")
+
+	flag.Parse()
+
+	fmt.Println("address:", *address)
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
@@ -22,7 +30,7 @@ func main() {
 		})
 	})
 
-	err := http.ListenAndServe(`:8080`, r)
+	err := http.ListenAndServe(*address, r)
 	if err != nil {
 		panic(err)
 	}
