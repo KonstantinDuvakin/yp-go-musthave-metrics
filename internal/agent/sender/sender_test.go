@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const addr = "localhost:8080"
+
 func TestSendMetrics(t *testing.T) {
 	type want struct {
 		code        int
@@ -28,7 +30,7 @@ func TestSendMetrics(t *testing.T) {
 		{
 			name: "positive counter test #1",
 			args: args{
-				url: fmt.Sprintf("%supdate/counter/counter/1", serverURL),
+				url: fmt.Sprintf("http://%s/update/counter/counter/1", addr),
 			},
 			want: want{
 				code:        200,
@@ -76,7 +78,7 @@ func TestUrlBuilder(t *testing.T) {
 				name:       "",
 				value:      "",
 			},
-			want: fmt.Sprintf("%supdate///", serverURL),
+			want: fmt.Sprintf("http://%s/update///", addr),
 		},
 		{
 			name: "counter url",
@@ -85,12 +87,12 @@ func TestUrlBuilder(t *testing.T) {
 				name:       "counter",
 				value:      "1",
 			},
-			want: fmt.Sprintf("%supdate/counter/counter/1", serverURL),
+			want: fmt.Sprintf("http://%s/update/counter/counter/1", addr),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := URLBuilder(tt.args.metricType, tt.args.name, tt.args.value); got != tt.want {
+			if got := URLBuilder(addr, tt.args.metricType, tt.args.name, tt.args.value); got != tt.want {
 				t.Errorf("URLBuilder() = %v, want %v", got, tt.want)
 			}
 		})
