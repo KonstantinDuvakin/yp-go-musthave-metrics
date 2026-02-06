@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -44,6 +43,6 @@ func GetMetricHandler(storage *storage.MemStorage) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, fmt.Sprintf("%s = %s\n", metricName, res))
+		io.WriteString(w, res)
 	}
 }

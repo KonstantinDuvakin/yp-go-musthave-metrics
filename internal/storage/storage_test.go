@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"sync"
 	"testing"
 )
 
@@ -9,7 +8,6 @@ func TestAgentStorage_AddCounter(t *testing.T) {
 	type fields struct {
 		Gauge   GaugeMap
 		Counter CounterMap
-		mu      sync.RWMutex
 	}
 	type args struct {
 		name string
@@ -25,7 +23,6 @@ func TestAgentStorage_AddCounter(t *testing.T) {
 			fields: fields{
 				Gauge:   make(GaugeMap),
 				Counter: make(CounterMap),
-				mu:      sync.RWMutex{},
 			},
 			args: args{
 				name: "foo",
@@ -38,7 +35,6 @@ func TestAgentStorage_AddCounter(t *testing.T) {
 			as := &AgentStorage{
 				Gauge:   tt.fields.Gauge,
 				Counter: tt.fields.Counter,
-				mu:      tt.fields.mu,
 			}
 			as.AddCounter(tt.args.name)
 			if as.Counter[tt.args.name] != tt.want {
@@ -52,7 +48,6 @@ func TestAgentStorage_SetGauge(t *testing.T) {
 	type fields struct {
 		Gauge   GaugeMap
 		Counter CounterMap
-		mu      sync.RWMutex
 	}
 	type args struct {
 		name  string
@@ -69,7 +64,6 @@ func TestAgentStorage_SetGauge(t *testing.T) {
 			fields: fields{
 				Gauge:   make(GaugeMap),
 				Counter: make(CounterMap),
-				mu:      sync.RWMutex{},
 			},
 			args: args{
 				name:  "foo",
@@ -83,7 +77,6 @@ func TestAgentStorage_SetGauge(t *testing.T) {
 			as := &AgentStorage{
 				Gauge:   tt.fields.Gauge,
 				Counter: tt.fields.Counter,
-				mu:      tt.fields.mu,
 			}
 			as.SetGauge(tt.args.name, tt.args.value)
 			if got := as.Gauge[tt.args.name]; got != tt.want {
@@ -97,7 +90,6 @@ func TestAgentStorage_Snapshot(t *testing.T) {
 	type fields struct {
 		Gauge   GaugeMap
 		Counter CounterMap
-		mu      sync.RWMutex
 	}
 	tests := []struct {
 		name   string
@@ -120,7 +112,6 @@ func TestAgentStorage_Snapshot(t *testing.T) {
 			as := &AgentStorage{
 				Gauge:   tt.fields.Gauge,
 				Counter: tt.fields.Counter,
-				mu:      tt.fields.mu,
 			}
 			gotG, gotC := as.Snapshot()
 			gotG["g1"] = 999
@@ -136,7 +127,6 @@ func TestMemStorage_AddCounter(t *testing.T) {
 	type fields struct {
 		Gauge   GaugeMap
 		Counter CounterMap
-		mu      sync.RWMutex
 	}
 	type args struct {
 		field string
@@ -153,7 +143,6 @@ func TestMemStorage_AddCounter(t *testing.T) {
 			fields: fields{
 				Gauge:   make(GaugeMap),
 				Counter: make(CounterMap),
-				mu:      sync.RWMutex{},
 			},
 			args: args{
 				field: "foo",
@@ -167,7 +156,6 @@ func TestMemStorage_AddCounter(t *testing.T) {
 			ms := &MemStorage{
 				Gauge:   tt.fields.Gauge,
 				Counter: tt.fields.Counter,
-				mu:      tt.fields.mu,
 			}
 			ms.AddCounter(tt.args.field, tt.args.value)
 			if got := ms.Counter[tt.args.field]; got != tt.want {
@@ -181,7 +169,6 @@ func TestMemStorage_SetGauge(t *testing.T) {
 	type fields struct {
 		Gauge   GaugeMap
 		Counter CounterMap
-		mu      sync.RWMutex
 	}
 	type args struct {
 		field string
@@ -198,7 +185,6 @@ func TestMemStorage_SetGauge(t *testing.T) {
 			fields: fields{
 				Gauge:   make(GaugeMap),
 				Counter: make(CounterMap),
-				mu:      sync.RWMutex{},
 			},
 			args: args{
 				field: "foo",
@@ -212,7 +198,6 @@ func TestMemStorage_SetGauge(t *testing.T) {
 			ms := &MemStorage{
 				Gauge:   tt.fields.Gauge,
 				Counter: tt.fields.Counter,
-				mu:      tt.fields.mu,
 			}
 			ms.SetGauge(tt.args.field, tt.args.value)
 		})
