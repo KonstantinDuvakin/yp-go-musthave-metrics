@@ -83,6 +83,8 @@ func TestUpdateHandler_StatusCodes(t *testing.T) {
 			if res.StatusCode != tt.wantStatus {
 				t.Fatalf("status=%d, want=%d", res.StatusCode, tt.wantStatus)
 			}
+
+			res.Body.Close()
 		})
 	}
 }

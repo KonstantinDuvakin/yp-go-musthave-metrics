@@ -11,14 +11,14 @@ type CounterMap map[string]int64
 type MemStorage struct {
 	Gauge   GaugeMap
 	Counter CounterMap
-	mu      *sync.RWMutex
+	mu      sync.RWMutex
 }
 
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		Gauge:   make(GaugeMap),
 		Counter: make(CounterMap),
-		mu:      &sync.RWMutex{},
+		mu:      sync.RWMutex{},
 	}
 }
 
@@ -63,14 +63,14 @@ func (ms *MemStorage) GetAllCounters() CounterMap {
 type AgentStorage struct {
 	Gauge   GaugeMap
 	Counter CounterMap
-	mu      *sync.RWMutex
+	mu      sync.RWMutex
 }
 
 func NewAgentStorage() *AgentStorage {
 	return &AgentStorage{
 		Gauge:   make(GaugeMap),
 		Counter: make(CounterMap),
-		mu:      &sync.RWMutex{},
+		mu:      sync.RWMutex{},
 	}
 }
 
