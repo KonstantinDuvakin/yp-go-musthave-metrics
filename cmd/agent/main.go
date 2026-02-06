@@ -8,16 +8,19 @@ import (
 )
 
 var (
-	address        = flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
-	pollInterval   = flag.Duration("p", 2*time.Second, "defined poll interval duration")
-	reportInterval = flag.Duration("r", 10*time.Second, "defined report interval duration")
+	address   = flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
+	pollSec   = flag.Int("p", 2, "defined poll interval duration")
+	reportSec = flag.Int("r", 10, "defined report interval duration")
 )
 
 func main() {
 	flag.Parse()
 
 	store := storage.NewAgentStorage()
-	agent := New(store, address)
+	agent := New(store, *address)
 
-	agent.Run(*pollInterval, *reportInterval)
+	pollInterval := time.Duration(*pollSec) * time.Second
+	reportInterval := time.Duration(*reportSec) * time.Second
+
+	agent.Run(pollInterval, reportInterval)
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
@@ -16,8 +15,6 @@ func main() {
 	address := flag.String("a", "localhost:8080", "set an address of a server")
 
 	flag.Parse()
-
-	fmt.Println("address:", *address)
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {

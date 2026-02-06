@@ -16,10 +16,10 @@ type Agent struct {
 	address string
 }
 
-func New(storage *storage.AgentStorage, address *string) *Agent {
+func New(storage *storage.AgentStorage, address string) *Agent {
 	return &Agent{
 		storage: storage,
-		address: *address,
+		address: address,
 	}
 }
 
