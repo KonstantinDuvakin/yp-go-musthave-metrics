@@ -51,7 +51,7 @@ func TestGetMetricHandler_GaugeOK(t *testing.T) {
 
 	body := readBody(t, res)
 	if body != "123.5" && body != "123.5\n" {
-		t.Fatalf("body=%q, want %q", body, "Alloc = 123.5\\n")
+		t.Fatalf("body=%q, want %q", body, "Alloc = 123.5\n")
 	}
 }
 
@@ -74,8 +74,8 @@ func TestGetMetricHandler_CounterOK(t *testing.T) {
 	}
 
 	body := readBody(t, res)
-	if body != "12\n" {
-		t.Fatalf("body=%q, want %q", body, "12\\n")
+	if body != "12" {
+		t.Fatalf("body=%q, want %q", body, "12")
 	}
 }
 
