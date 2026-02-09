@@ -92,7 +92,7 @@ func TestUrlBuilder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := URLBuilder(addr, tt.args.metricType, tt.args.name, tt.args.value); got != tt.want {
+			if got := URLBuilder(tt.args.metricType, tt.args.name, tt.args.value); got != tt.want {
 				t.Errorf("URLBuilder() = %v, want %v", got, tt.want)
 			}
 		})
