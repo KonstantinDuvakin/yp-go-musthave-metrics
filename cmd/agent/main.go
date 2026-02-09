@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 )
 
@@ -17,10 +22,14 @@ func main() {
 	flag.Parse()
 
 	store := storage.NewAgentStorage()
-	agent := New(store, *address)
+	send := sender.NewSender(*address)
+	agent := New(store, send)
 
 	pollInterval := time.Duration(*pollSec) * time.Second
 	reportInterval := time.Duration(*reportSec) * time.Second
 
-	agent.Run(pollInterval, reportInterval)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	agent.Run(ctx, pollInterval, reportInterval)
 }
