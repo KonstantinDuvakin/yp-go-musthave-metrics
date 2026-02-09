@@ -12,9 +12,9 @@ type Sender struct {
 	client *resty.Client
 }
 
-func NewSender(baseUrl string) *Sender {
+func NewSender(baseURL string) *Sender {
 	client := resty.New()
-	client.SetBaseURL("http://" + baseUrl)
+	client.SetBaseURL("http://" + baseURL)
 	client.SetHeader("Content-Type", "text/plain")
 	client.SetTimeout(2 * time.Second)
 	return &Sender{
