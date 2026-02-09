@@ -78,7 +78,7 @@ func TestUrlBuilder(t *testing.T) {
 				name:       "",
 				value:      "",
 			},
-			want: fmt.Sprint("/update///"),
+			want: "/update///",
 		},
 		{
 			name: "counter url",
@@ -87,7 +87,7 @@ func TestUrlBuilder(t *testing.T) {
 				name:       "counter",
 				value:      "1",
 			},
-			want: fmt.Sprint("/update/counter/counter/1"),
+			want: "/update/counter/counter/1",
 		},
 	}
 	for _, tt := range tests {
