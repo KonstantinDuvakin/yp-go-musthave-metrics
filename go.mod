@@ -1,6 +1,6 @@
 module github.com/KonstantinDuvakin/yp-go-musthave-metrics
 
-go 1.24.12
+go 1.26.4
 
 require (
 	github.com/go-chi/chi/v5 v5.2.4 // indirect
