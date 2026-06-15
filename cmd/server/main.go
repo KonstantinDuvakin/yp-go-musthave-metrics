@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -18,9 +19,7 @@ import (
 func main() {
 	store := storage.NewMemStorage()
 
-	address := flag.String("a", "localhost:8080", "set an address of a server")
-
-	flag.Parse()
+	c := config.NewConfigServer()
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
@@ -37,12 +36,12 @@ func main() {
 	defer stop()
 
 	server := &http.Server{
-		Addr:    *address,
+		Addr:    c.Address,
 		Handler: r,
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server error: %v", err)
 		}
 	}()
@@ -51,5 +50,6 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	_ = server.Shutdown(shutdownCtx)
 }
