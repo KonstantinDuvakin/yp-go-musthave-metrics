@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"os"
+	"strconv"
 )
 
 type ConfigAgent struct {
@@ -25,11 +26,15 @@ func NewConfigAgent() *ConfigAgent {
 	}
 
 	if envPollSec := os.Getenv("POLL_INTERVAL"); envPollSec != "" {
-		c.Address = envPollSec
+		if v, err := strconv.Atoi(envPollSec); err == nil {
+			c.PollSec = v
+		}
 	}
 
 	if envReportSec := os.Getenv("REPORT_INTERVAL"); envReportSec != "" {
-		c.Address = envReportSec
+		if v, err := strconv.Atoi(envReportSec); err == nil {
+			c.ReportSec = v
+		}
 	}
 
 	return c
