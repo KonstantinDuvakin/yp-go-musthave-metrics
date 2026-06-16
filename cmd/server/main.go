@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,8 +11,10 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -21,14 +22,19 @@ func main() {
 
 	c := config.NewConfigServer()
 
+	err := logger.InitializeLogger("info")
+	if err != nil {
+		logger.Log.Warn("Failed to initialize logger", zap.Error(err))
+	}
+
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
-		r.Get("/", handler.RootHandler(store))
+		r.Get("/", logger.RequestLogger(handler.RootHandler(store)))
 		r.Route("/update", func(r chi.Router) {
-			r.Post(`/{type}/{name}/{value}`, handler.UpdateHandler(store))
+			r.Post(`/{type}/{name}/{value}`, logger.RequestLogger(handler.UpdateHandler(store)))
 		})
 		r.Route("/value", func(r chi.Router) {
-			r.Get(`/{type}/{name}`, handler.GetMetricHandler(store))
+			r.Get(`/{type}/{name}`, logger.RequestLogger(handler.GetMetricHandler(store)))
 		})
 	})
 
@@ -41,8 +47,9 @@ func main() {
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("server error: %v", err)
+		logger.Log.Info("Running server", zap.String("address", c.Address))
+		if err = server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Log.Error("server error: %v", zap.Error(err))
 		}
 	}()
 
