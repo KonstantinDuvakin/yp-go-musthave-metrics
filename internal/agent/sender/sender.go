@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -22,8 +23,17 @@ func NewSender(baseURL string) *Sender {
 	}
 }
 
-func (s Sender) SendMetrics(ctx context.Context, url string) error {
+func (s *Sender) SendMetrics(ctx context.Context, url string) error {
 	_, err := s.client.R().SetContext(ctx).Post(url)
+	return err
+}
+
+func (s *Sender) SendMetricsJson(ctx context.Context, body models.Metrics) error {
+	_, err := s.client.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		Post("/update")
 	return err
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/collector"
@@ -43,15 +42,24 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration) {
 		case <-reportTicker.C:
 			gauge, counter := a.storage.Snapshot()
 			for name, value := range gauge {
-				url := sender.URLBuilder(models.Gauge, name, strconv.FormatFloat(value, 'g', -1, 64))
-				err := a.sender.SendMetrics(ctx, url)
+				body := models.Metrics{
+					ID:    name,
+					MType: models.Gauge,
+					Value: &value,
+				}
+
+				err := a.sender.SendMetricsJson(ctx, body)
 				if err != nil {
 					fmt.Printf("Couldn't sent gauge metric %s\nError: %v\n", name, err)
 				}
 			}
 			for name, value := range counter {
-				url := sender.URLBuilder(models.Counter, name, strconv.FormatInt(value, 10))
-				err := a.sender.SendMetrics(ctx, url)
+				body := models.Metrics{
+					ID:    name,
+					MType: models.Gauge,
+					Delta: &value,
+				}
+				err := a.sender.SendMetricsJson(ctx, body)
 				if err != nil {
 					fmt.Printf("Couldn't sent counter metric %s\nError: %v\n", name, err)
 				}

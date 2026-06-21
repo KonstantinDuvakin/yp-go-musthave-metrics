@@ -31,9 +31,11 @@ func main() {
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", logger.RequestLogger(handler.RootHandler(store)))
 		r.Route("/update", func(r chi.Router) {
+			r.Post("/", logger.RequestLogger(handler.UpdateMetricJson(store)))
 			r.Post(`/{type}/{name}/{value}`, logger.RequestLogger(handler.UpdateHandler(store)))
 		})
 		r.Route("/value", func(r chi.Router) {
+			r.Post("/", logger.RequestLogger(handler.GetMetricJson(store)))
 			r.Get(`/{type}/{name}`, logger.RequestLogger(handler.GetMetricHandler(store)))
 		})
 	})
