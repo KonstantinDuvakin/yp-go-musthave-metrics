@@ -27,7 +27,7 @@ func GetMetricJson(storage *storage.MemStorage) http.HandlerFunc {
 			val, ok := storage.GetCounter(req.ID)
 			if !ok {
 				logger.Log.Error("error getting metric value", zap.String("id", req.ID))
-				rw.WriteHeader(http.StatusBadRequest)
+				rw.WriteHeader(http.StatusNotFound)
 				rw.Write([]byte("No such counter metric"))
 				return
 			}
@@ -37,7 +37,7 @@ func GetMetricJson(storage *storage.MemStorage) http.HandlerFunc {
 			val, ok := storage.GetGauge(req.ID)
 			if !ok {
 				logger.Log.Error("error getting metric value", zap.String("id", req.ID))
-				rw.WriteHeader(http.StatusBadRequest)
+				rw.WriteHeader(http.StatusNotFound)
 				rw.Write([]byte("No such gauge metric"))
 				return
 			}

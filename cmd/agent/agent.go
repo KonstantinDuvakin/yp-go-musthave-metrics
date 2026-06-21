@@ -56,7 +56,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration) {
 			for name, value := range counter {
 				body := models.Metrics{
 					ID:    name,
-					MType: models.Gauge,
+					MType: models.Counter,
 					Delta: &value,
 				}
 				err := a.sender.SendMetricsJson(ctx, body)

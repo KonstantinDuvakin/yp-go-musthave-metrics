@@ -37,12 +37,12 @@ func TestGetMetricJson_StatusCodes(t *testing.T) {
 		{
 			name:       "counter not found",
 			body:       `{"id":"Unknown","type":"counter"}`,
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:       "gauge not found",
 			body:       `{"id":"Unknown","type":"gauge"}`,
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:       "unknown type",
