@@ -51,8 +51,8 @@ func (lrw *loggerResponseWriter) WriteHeader(statusCode int) {
 	lrw.responseData.status = statusCode
 }
 
-func RequestLogger(h http.HandlerFunc) http.HandlerFunc {
-	logFn := func(w http.ResponseWriter, r *http.Request) {
+func RequestLogger(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		rd := &responseData{
@@ -65,7 +65,7 @@ func RequestLogger(h http.HandlerFunc) http.HandlerFunc {
 			responseData:   rd,
 		}
 
-		h(lrw, r)
+		h.ServeHTTP(lrw, r)
 
 		duration := time.Since(start)
 
@@ -75,7 +75,5 @@ func RequestLogger(h http.HandlerFunc) http.HandlerFunc {
 			zap.Duration("duration", duration),
 		)
 		Log.Info("Outcoming Response", zap.Duration("duration", duration))
-	}
-
-	return logFn
+	})
 }

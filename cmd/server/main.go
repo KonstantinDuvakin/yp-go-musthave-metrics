@@ -11,7 +11,8 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/logger"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -29,14 +30,17 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
-		r.Get("/", logger.RequestLogger(handler.RootHandler(store)))
+		r.Use(logger.RequestLogger)
+		r.Use(gzip.Middleware)
+
+		r.Get("/", handler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", logger.RequestLogger(handler.UpdateMetricJson(store)))
-			r.Post(`/{type}/{name}/{value}`, logger.RequestLogger(handler.UpdateHandler(store)))
+			r.Post("/", handler.UpdateMetricJson(store))
+			r.Post(`/{type}/{name}/{value}`, handler.UpdateHandler(store))
 		})
 		r.Route("/value", func(r chi.Router) {
-			r.Post("/", logger.RequestLogger(handler.GetMetricJson(store)))
-			r.Get(`/{type}/{name}`, logger.RequestLogger(handler.GetMetricHandler(store)))
+			r.Post("/", handler.GetMetricJson(store))
+			r.Get(`/{type}/{name}`, handler.GetMetricHandler(store))
 		})
 	})
 

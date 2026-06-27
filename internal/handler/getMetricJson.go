@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/logger"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"go.uber.org/zap"
