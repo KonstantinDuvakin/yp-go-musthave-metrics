@@ -6,36 +6,36 @@ import (
 	"strconv"
 )
 
-type ConfigAgent struct {
+type AgentConfig struct {
 	Address   string
 	PollSec   int
 	ReportSec int
 }
 
-func NewConfigAgent() *ConfigAgent {
-	c := &ConfigAgent{}
+func NewConfigAgent() *AgentConfig {
+	ac := &AgentConfig{}
 
-	flag.StringVar(&c.Address, "a", "localhost:8080", "The address to listen on for HTTP requests.")
-	flag.IntVar(&c.PollSec, "p", 2, "defined poll interval duration")
-	flag.IntVar(&c.ReportSec, "r", 10, "defined report interval duration")
+	flag.StringVar(&ac.Address, "a", "localhost:8080", "The address to listen on for HTTP requests.")
+	flag.IntVar(&ac.PollSec, "p", 2, "defined poll interval duration")
+	flag.IntVar(&ac.ReportSec, "r", 10, "defined report interval duration")
 
 	flag.Parse()
 
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
-		c.Address = envAddress
+		ac.Address = envAddress
 	}
 
 	if envPollSec := os.Getenv("POLL_INTERVAL"); envPollSec != "" {
 		if v, err := strconv.Atoi(envPollSec); err == nil {
-			c.PollSec = v
+			ac.PollSec = v
 		}
 	}
 
 	if envReportSec := os.Getenv("REPORT_INTERVAL"); envReportSec != "" {
 		if v, err := strconv.Atoi(envReportSec); err == nil {
-			c.ReportSec = v
+			ac.ReportSec = v
 		}
 	}
 
-	return c
+	return ac
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 )
 
 func TestGetMetricJson_StatusCodes(t *testing.T) {
@@ -53,7 +53,7 @@ func TestGetMetricJson_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := storage.NewMemStorage()
+			ms := memStorage.NewMemStorage()
 			ms.AddCounter("PollCount", 10)
 			ms.SetGauge("Alloc", 123.45)
 
@@ -75,7 +75,7 @@ func TestGetMetricJson_StatusCodes(t *testing.T) {
 }
 
 func TestGetMetricJson_CounterResponseBody(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	ms.AddCounter("PollCount", 42)
 
 	h := GetMetricJson(ms)
@@ -111,7 +111,7 @@ func TestGetMetricJson_CounterResponseBody(t *testing.T) {
 }
 
 func TestGetMetricJson_GaugeResponseBody(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	ms.SetGauge("Alloc", 3.14)
 
 	h := GetMetricJson(ms)

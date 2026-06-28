@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 )
 
 func TestUpdateMetricJson_StatusCodes(t *testing.T) {
@@ -62,7 +62,7 @@ func TestUpdateMetricJson_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := storage.NewMemStorage()
+			ms := memStorage.NewMemStorage()
 			h := UpdateMetricJson(ms)
 
 			req := httptest.NewRequest(http.MethodPost, "/update/", strings.NewReader(tt.body))
@@ -81,7 +81,7 @@ func TestUpdateMetricJson_StatusCodes(t *testing.T) {
 }
 
 func TestUpdateMetricJson_StoresGauge(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	h := UpdateMetricJson(ms)
 
 	body := `{"id":"Alloc","type":"gauge","value":42.5}`
@@ -104,7 +104,7 @@ func TestUpdateMetricJson_StoresGauge(t *testing.T) {
 }
 
 func TestUpdateMetricJson_CounterAccumulates(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	h := UpdateMetricJson(ms)
 
 	send := func(delta int64) {

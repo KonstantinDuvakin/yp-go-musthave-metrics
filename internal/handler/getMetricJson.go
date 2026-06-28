@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetMetricJson(storage *storage.MemStorage) http.HandlerFunc {
+func GetMetricJson(storage storage.ServerStorage) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req models.Metrics
 

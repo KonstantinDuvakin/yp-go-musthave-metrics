@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMiddleware(t *testing.T) {
-	ms := &storage.MemStorage{
+	ms := &memStorage.MemStorage{
 		Gauge: map[string]float64{
 			"Alloc": 7.52,
 		},

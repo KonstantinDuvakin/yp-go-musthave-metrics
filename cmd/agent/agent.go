@@ -8,15 +8,15 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/collector"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agentStorage"
 )
 
 type Agent struct {
-	storage *storage.AgentStorage
+	storage *agentStorage.AgentStorage
 	sender  *sender.Sender
 }
 
-func New(storage *storage.AgentStorage, sender *sender.Sender) *Agent {
+func New(storage *agentStorage.AgentStorage, sender *sender.Sender) *Agent {
 	return &Agent{
 		storage: storage,
 		sender:  sender,

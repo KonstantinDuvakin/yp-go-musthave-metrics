@@ -14,7 +14,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
 	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -48,7 +48,7 @@ func TestSendMetrics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := storage.NewMemStorage()
+			ms := memStorage.NewMemStorage()
 
 			r := chi.NewRouter()
 			r.Post("/update/{type}/{name}/{value}", handler.UpdateHandler(ms))
@@ -134,7 +134,7 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 	delta := int64(5)
 	body := models.Metrics{ID: "PollCount", MType: models.Counter, Delta: &delta}
 
-	store := storage.NewMemStorage()
+	store := memStorage.NewMemStorage()
 
 	r := chi.NewRouter()
 	r.Use(gzipmw.Middleware)

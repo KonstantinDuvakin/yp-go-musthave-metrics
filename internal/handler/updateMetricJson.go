@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func UpdateMetricJson(storage *storage.MemStorage) http.HandlerFunc {
+func UpdateMetricJson(storage storage.ServerStorage) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req models.Metrics
 

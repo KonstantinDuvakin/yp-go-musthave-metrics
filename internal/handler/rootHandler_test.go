@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 )
 
 func TestRootHandler_OK_EmptyStorage(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 
 	h := RootHandler(ms)
 
@@ -45,7 +45,7 @@ func TestRootHandler_OK_EmptyStorage(t *testing.T) {
 }
 
 func TestRootHandler_OK_WithMetrics(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 
 	// подготовка данных
 	ms.SetGauge("Alloc", 123.5)

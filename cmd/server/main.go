@@ -13,19 +13,31 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
 func main() {
-	store := storage.NewMemStorage()
-
 	c := config.NewConfigServer()
+
+	var store storage.ServerStorage = memStorage.NewMemStorage()
 
 	err := logger.InitializeLogger("info")
 	if err != nil {
 		logger.Log.Warn("Failed to initialize logger", zap.Error(err))
+	}
+
+	if c.Restore {
+		if err = store.RestoreFromFile(c.FileStoragePath); err != nil {
+			logger.Log.Warn("Failed to restore data from file", zap.Error(err))
+		}
+	}
+
+	if c.StoreInterval == 0 {
+		store = memStorage.NewSyncMemStorage(store, c.FileStoragePath)
 	}
 
 	r := chi.NewRouter()
@@ -47,6 +59,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	done := make(chan struct{})
+	go service.SaveToFile(ctx, c, store, done)
+
 	server := &http.Server{
 		Addr:    c.Address,
 		Handler: r,
@@ -65,4 +80,6 @@ func main() {
 	defer cancel()
 
 	_ = server.Shutdown(shutdownCtx)
+
+	<-done
 }

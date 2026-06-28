@@ -7,7 +7,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 )
 
-func RootHandler(storage *storage.MemStorage) http.HandlerFunc {
+func RootHandler(storage storage.ServerStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gauges := storage.GetAllGauges()
 		counters := storage.GetAllCounters()
