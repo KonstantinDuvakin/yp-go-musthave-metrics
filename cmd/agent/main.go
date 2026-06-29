@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +15,8 @@ import (
 
 func main() {
 	c := config.NewConfigAgent()
+	flag.Parse()
+	c.ApplyEnv()
 
 	store := agentStorage.NewAgentStorage()
 	send := sender.NewSender(c.Address)

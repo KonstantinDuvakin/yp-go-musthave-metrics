@@ -21,8 +21,10 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.FileStoragePath, "f", "metrics_log.txt", "The file storage path.")
 	flag.BoolVar(&sc.Restore, "r", true, "Flag for restoring data from storage file.")
 
-	flag.Parse()
+	return sc
+}
 
+func (sc *ServerConfig) ApplyEnv() {
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		sc.Address = envAddress
 	}
@@ -42,6 +44,4 @@ func NewConfigServer() *ServerConfig {
 			sc.Restore = restore
 		}
 	}
-
-	return sc
 }

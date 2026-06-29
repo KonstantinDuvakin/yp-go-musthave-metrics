@@ -58,28 +58,24 @@ func TestRestoreFromFile_MissingFile(t *testing.T) {
 	}
 }
 
-func TestSyncMemStorage_SavesOnEachWrite(t *testing.T) {
+func TestSyncMemStorage_PersistsAfterClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sync.json")
 
 	store := NewSyncMemStorage(NewMemStorage(), path)
-
 	store.AddCounter("PollCount", 7)
-
-	afterAdd := NewMemStorage()
-	if err := afterAdd.RestoreFromFile(path); err != nil {
-		t.Fatalf("RestoreFromFile после AddCounter: %v", err)
-	}
-	if got, ok := afterAdd.GetCounter("PollCount"); !ok || got != 7 {
-		t.Errorf("после AddCounter: counter = %d, ok=%v; want 7, true", got, ok)
-	}
-
 	store.SetGauge("Alloc", 2.5)
 
-	afterSet := NewMemStorage()
-	if err := afterSet.RestoreFromFile(path); err != nil {
-		t.Fatalf("RestoreFromFile после SetGauge: %v", err)
+	store.Close()
+
+	restored := NewMemStorage()
+	if err := restored.RestoreFromFile(path); err != nil {
+		t.Fatalf("RestoreFromFile после Close: %v", err)
 	}
-	if got, ok := afterSet.GetGauge("Alloc"); !ok || got != 2.5 {
-		t.Errorf("после SetGauge: gauge = %v, ok=%v; want 2.5, true", got, ok)
+
+	if got, ok := restored.GetCounter("PollCount"); !ok || got != 7 {
+		t.Errorf("counter PollCount = %d, ok=%v; want 7, true", got, ok)
+	}
+	if got, ok := restored.GetGauge("Alloc"); !ok || got != 2.5 {
+		t.Errorf("gauge Alloc = %v, ok=%v; want 2.5, true", got, ok)
 	}
 }

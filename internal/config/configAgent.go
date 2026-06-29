@@ -19,8 +19,10 @@ func NewConfigAgent() *AgentConfig {
 	flag.IntVar(&ac.PollSec, "p", 2, "defined poll interval duration")
 	flag.IntVar(&ac.ReportSec, "r", 10, "defined report interval duration")
 
-	flag.Parse()
+	return ac
+}
 
+func (ac *AgentConfig) ApplyEnv() {
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		ac.Address = envAddress
 	}
@@ -36,6 +38,4 @@ func NewConfigAgent() *AgentConfig {
 			ac.ReportSec = v
 		}
 	}
-
-	return ac
 }

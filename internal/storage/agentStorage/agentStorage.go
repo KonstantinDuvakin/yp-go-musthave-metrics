@@ -23,14 +23,14 @@ func NewAgentStorage() *AgentStorage {
 
 func (as *AgentStorage) SetGauge(name string, value float64) {
 	as.mu.Lock()
-	as.Gauge[name] = value
 	defer as.mu.Unlock()
+	as.Gauge[name] = value
 }
 
 func (as *AgentStorage) AddCounter(name string) {
 	as.mu.Lock()
-	as.Counter[name]++
 	defer as.mu.Unlock()
+	as.Counter[name]++
 }
 
 func (as *AgentStorage) Snapshot() (g storage.GaugeMap, c storage.CounterMap) {

@@ -30,7 +30,7 @@ func TestUpdateMetricJson_StatusCodes(t *testing.T) {
 		},
 		{
 			name:       "invalid json",
-			body:       `{"id":"Alloc","type":`,
+			body:       `{"id":"Alloc","type": "counter","delta":10`,
 			wantStatus: http.StatusBadRequest,
 		},
 		{

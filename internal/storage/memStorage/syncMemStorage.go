@@ -7,24 +7,73 @@ import (
 )
 
 type SyncMemStorage struct {
-	storage.ServerStorage
-	path string
+	store           storage.ServerStorage
+	path            string
+	isSavingFlag    chan struct{}
+	isFinishingFlag chan struct{}
 }
 
 func NewSyncMemStorage(s storage.ServerStorage, path string) *SyncMemStorage {
-	return &SyncMemStorage{s, path}
+	ms := &SyncMemStorage{s, path, make(chan struct{}, 1), make(chan struct{}, 1)}
+	go ms.startSaving()
+	return ms
 }
 
 func (s *SyncMemStorage) SetGauge(name string, value float64) {
-	s.ServerStorage.SetGauge(name, value)
-	if err := s.SaveMetricsToFile(s.path); err != nil {
-		logger.Log.Warn("Could not save metrics to file", zap.String("path", s.path), zap.Error(err))
-	}
+	s.store.SetGauge(name, value)
+	s.markSaving()
 }
 
 func (s *SyncMemStorage) AddCounter(name string, value int64) {
-	s.ServerStorage.AddCounter(name, value)
-	if err := s.SaveMetricsToFile(s.path); err != nil {
+	s.store.AddCounter(name, value)
+	s.markSaving()
+}
+
+func (s *SyncMemStorage) Close() {
+	close(s.isSavingFlag)
+	<-s.isFinishingFlag
+}
+
+func (s *SyncMemStorage) markSaving() {
+	select {
+	case s.isSavingFlag <- struct{}{}:
+	default:
+	}
+}
+
+func (s *SyncMemStorage) startSaving() {
+	for range s.isSavingFlag {
+		if err := s.store.SaveMetricsToFile(s.path); err != nil {
+			logger.Log.Warn("Could not save metrics to file", zap.String("path", s.path), zap.Error(err))
+		}
+	}
+
+	if err := s.store.SaveMetricsToFile(s.path); err != nil {
 		logger.Log.Warn("Could not save metrics to file", zap.String("path", s.path), zap.Error(err))
 	}
+	close(s.isFinishingFlag)
+}
+
+func (s *SyncMemStorage) GetGauge(field string) (float64, bool) {
+	return s.store.GetGauge(field)
+}
+
+func (s *SyncMemStorage) GetCounter(field string) (int64, bool) {
+	return s.store.GetCounter(field)
+}
+
+func (s *SyncMemStorage) GetAllGauges() storage.GaugeMap {
+	return s.store.GetAllGauges()
+}
+
+func (s *SyncMemStorage) GetAllCounters() storage.CounterMap {
+	return s.store.GetAllCounters()
+}
+
+func (s *SyncMemStorage) SaveMetricsToFile(filename string) error {
+	return s.store.SaveMetricsToFile(filename)
+}
+
+func (s *SyncMemStorage) RestoreFromFile(filename string) error {
+	return s.store.RestoreFromFile(filename)
 }

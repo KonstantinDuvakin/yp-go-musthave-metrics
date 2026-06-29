@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,8 +23,10 @@ import (
 
 func main() {
 	c := config.NewConfigServer()
+	flag.Parse()
+	c.ApplyEnv()
 
-	var store storage.ServerStorage = memStorage.NewMemStorage()
+	base := memStorage.NewMemStorage()
 
 	err := logger.InitializeLogger("info")
 	if err != nil {
@@ -31,13 +34,25 @@ func main() {
 	}
 
 	if c.Restore {
-		if err = store.RestoreFromFile(c.FileStoragePath); err != nil {
+		if err = base.RestoreFromFile(c.FileStoragePath); err != nil {
 			logger.Log.Warn("Failed to restore data from file", zap.Error(err))
 		}
 	}
 
+	var store storage.ServerStorage = base
+	var shutdown = func() {}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	if c.StoreInterval == 0 {
-		store = memStorage.NewSyncMemStorage(store, c.FileStoragePath)
+		syncStore := memStorage.NewSyncMemStorage(store, c.FileStoragePath)
+		store = syncStore
+		shutdown = syncStore.Close
+	} else {
+		done := make(chan struct{})
+		go service.SaveToFile(ctx, c, store, done)
+		shutdown = func() { <-done }
 	}
 
 	r := chi.NewRouter()
@@ -56,12 +71,6 @@ func main() {
 		})
 	})
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	done := make(chan struct{})
-	go service.SaveToFile(ctx, c, store, done)
-
 	server := &http.Server{
 		Addr:    c.Address,
 		Handler: r,
@@ -70,7 +79,7 @@ func main() {
 	go func() {
 		logger.Log.Info("Running server", zap.String("address", c.Address))
 		if err = server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Log.Error("server error: %v", zap.Error(err))
+			logger.Log.Error("server error: ", zap.Error(err))
 		}
 	}()
 
@@ -81,5 +90,5 @@ func main() {
 
 	_ = server.Shutdown(shutdownCtx)
 
-	<-done
+	shutdown()
 }
