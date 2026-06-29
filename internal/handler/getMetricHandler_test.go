@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/go-chi/chi/v5"
 )
 
-func newValueRouter(ms *storage.MemStorage) http.Handler {
+func newValueRouter(ms *memStorage.MemStorage) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/value/{type}/{name}", GetMetricHandler(ms))
 	return r
@@ -28,7 +28,7 @@ func readBody(t *testing.T, res *http.Response) string {
 }
 
 func TestGetMetricHandler_GaugeOK(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	ms.SetGauge("Alloc", 123.5)
 
 	router := newValueRouter(ms)
@@ -56,7 +56,7 @@ func TestGetMetricHandler_GaugeOK(t *testing.T) {
 }
 
 func TestGetMetricHandler_CounterOK(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	ms.AddCounter("PollCount", 10)
 	ms.AddCounter("PollCount", 2)
 
@@ -80,7 +80,7 @@ func TestGetMetricHandler_CounterOK(t *testing.T) {
 }
 
 func TestGetMetricHandler_NotFoundMetric(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	router := newValueRouter(ms)
 
 	req := httptest.NewRequest(http.MethodGet, "/value/"+models.Gauge+"/Unknown", nil)
@@ -96,7 +96,7 @@ func TestGetMetricHandler_NotFoundMetric(t *testing.T) {
 }
 
 func TestGetMetricHandler_RouteNotMatched(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	router := newValueRouter(ms)
 
 	req := httptest.NewRequest(http.MethodGet, "/value/"+models.Gauge, nil)
@@ -112,7 +112,7 @@ func TestGetMetricHandler_RouteNotMatched(t *testing.T) {
 }
 
 func TestGetMetricHandler_InvalidType_ShouldBeNotFoundOrBadRequest(t *testing.T) {
-	ms := storage.NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	ms.SetGauge("Alloc", 1)
 
 	router := newValueRouter(ms)

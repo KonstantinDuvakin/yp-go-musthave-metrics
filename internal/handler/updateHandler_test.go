@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/go-chi/chi/v5"
 )
 
-func newTestRouter(ms *storage.MemStorage) http.Handler {
+func newTestRouter(ms *memStorage.MemStorage) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", UpdateHandler(ms))
 	return r
@@ -71,7 +71,7 @@ func TestUpdateHandler_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := storage.NewMemStorage()
+			ms := memStorage.NewMemStorage()
 			router := newTestRouter(ms)
 
 			req := httptest.NewRequest(tt.method, tt.path, nil)

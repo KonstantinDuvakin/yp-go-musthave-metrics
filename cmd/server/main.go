@@ -2,48 +2,84 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 func main() {
-	store := storage.NewMemStorage()
-
-	address := flag.String("a", "localhost:8080", "set an address of a server")
-
+	c := config.NewConfigServer()
 	flag.Parse()
+	c.ApplyEnv()
 
-	r := chi.NewRouter()
-	r.Route("/", func(r chi.Router) {
-		r.Get("/", handler.RootHandler(store))
-		r.Route("/update", func(r chi.Router) {
-			r.Post(`/{type}/{name}/{value}`, handler.UpdateHandler(store))
-		})
-		r.Route("/value", func(r chi.Router) {
-			r.Get(`/{type}/{name}`, handler.GetMetricHandler(store))
-		})
-	})
+	base := memStorage.NewMemStorage()
+
+	err := logger.InitializeLogger("info")
+	if err != nil {
+		logger.Log.Warn("Failed to initialize logger", zap.Error(err))
+	}
+
+	if c.Restore {
+		if err = base.RestoreFromFile(c.FileStoragePath); err != nil {
+			logger.Log.Warn("Failed to restore data from file", zap.Error(err))
+		}
+	}
+
+	var store storage.ServerStorage = base
+	var shutdown = func() {}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if c.StoreInterval == 0 {
+		syncStore := memStorage.NewSyncMemStorage(store, c.FileStoragePath)
+		store = syncStore
+		shutdown = syncStore.Close
+	} else {
+		done := make(chan struct{})
+		go service.SaveToFile(ctx, c, store, done)
+		shutdown = func() { <-done }
+	}
+
+	r := chi.NewRouter()
+	r.Route("/", func(r chi.Router) {
+		r.Use(logger.RequestLogger)
+		r.Use(gzip.Middleware)
+
+		r.Get("/", handler.RootHandler(store))
+		r.Route("/update", func(r chi.Router) {
+			r.Post("/", handler.UpdateMetricJson(store))
+			r.Post(`/{type}/{name}/{value}`, handler.UpdateHandler(store))
+		})
+		r.Route("/value", func(r chi.Router) {
+			r.Post("/", handler.GetMetricJson(store))
+			r.Get(`/{type}/{name}`, handler.GetMetricHandler(store))
+		})
+	})
+
 	server := &http.Server{
-		Addr:    *address,
+		Addr:    c.Address,
 		Handler: r,
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+		logger.Log.Info("Running server", zap.String("address", c.Address))
+		if err = server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Log.Error("server error: ", zap.Error(err))
 		}
 	}()
 
@@ -51,5 +87,8 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	_ = server.Shutdown(shutdownCtx)
+
+	shutdown()
 }

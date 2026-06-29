@@ -1,13 +1,20 @@
 package sender
 
 import (
+	"compress/gzip"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -41,7 +48,7 @@ func TestSendMetrics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := storage.NewMemStorage()
+			ms := memStorage.NewMemStorage()
 
 			r := chi.NewRouter()
 			r.Post("/update/{type}/{name}/{value}", handler.UpdateHandler(ms))
@@ -57,6 +64,97 @@ func TestSendMetrics(t *testing.T) {
 			}
 			res.Body.Close()
 		})
+	}
+}
+
+func TestSendMetricsJson(t *testing.T) {
+	delta := int64(5)
+
+	tests := []struct {
+		name string
+		body models.Metrics
+	}{
+		{
+			name: "positive counter test #1",
+			body: models.Metrics{
+				ID:    "PollCount",
+				MType: models.Counter,
+				Delta: &delta,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("Content-Encoding"); got != "gzip" {
+					t.Errorf("Content-Encoding = %q, want %q", got, "gzip")
+				}
+				if got := r.Header.Get("Content-Type"); got != "application/json" {
+					t.Errorf("Content-Type = %q, want %q", got, "application/json")
+				}
+
+				zr, err := gzip.NewReader(r.Body)
+				if err != nil {
+					t.Fatalf("gzip.NewReader: тело не является валидным gzip: %v", err)
+				}
+				defer zr.Close()
+
+				data, err := io.ReadAll(zr)
+				if err != nil {
+					t.Fatalf("чтение распакованного тела: %v", err)
+				}
+
+				var got models.Metrics
+				if err := json.Unmarshal(data, &got); err != nil {
+					t.Fatalf("распакованное тело не является валидным JSON: %v", err)
+				}
+
+				if got.ID != tt.body.ID || got.MType != tt.body.MType {
+					t.Errorf("получено %+v, ожидалось %+v", got, tt.body)
+				}
+				if got.Delta == nil || *got.Delta != *tt.body.Delta {
+					t.Errorf("Delta = %v, ожидалось %v", got.Delta, *tt.body.Delta)
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"status":"ok"}`))
+			}))
+			defer srv.Close()
+
+			s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+
+			if err := s.SendMetricsJson(context.Background(), tt.body); err != nil {
+				t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
+			}
+		})
+	}
+}
+
+func TestSendMetricsJson_Integration(t *testing.T) {
+	delta := int64(5)
+	body := models.Metrics{ID: "PollCount", MType: models.Counter, Delta: &delta}
+
+	store := memStorage.NewMemStorage()
+
+	r := chi.NewRouter()
+	r.Use(gzipmw.Middleware)
+	r.Post("/update", handler.UpdateMetricJson(store))
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+
+	if err := s.SendMetricsJson(context.Background(), body); err != nil {
+		t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
+	}
+
+	got, ok := store.GetCounter(body.ID)
+	if !ok {
+		t.Fatalf("counter %q не сохранён — round-trip через gzip не сработал", body.ID)
+	}
+	if got != *body.Delta {
+		t.Errorf("counter %q = %d, ожидалось %d", body.ID, got, *body.Delta)
 	}
 }
 
