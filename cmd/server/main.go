@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"net/http"
@@ -55,6 +56,12 @@ func main() {
 		shutdown = func() { <-done }
 	}
 
+	db, err := sql.Open("pgx", c.DB)
+	if err != nil {
+		logger.Log.Fatal("db connection error: ", zap.Error(err))
+	}
+	defer db.Close()
+
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
@@ -69,6 +76,7 @@ func main() {
 			r.Post("/", handler.GetMetricJson(store))
 			r.Get(`/{type}/{name}`, handler.GetMetricHandler(store))
 		})
+		r.Get("/ping", handler.PingDBHandler(db))
 	})
 
 	server := &http.Server{
