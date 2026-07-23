@@ -1,4 +1,4 @@
-package handler
+package rootHandler
 
 import (
 	"io"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
 )
 
 func TestRootHandler_OK_EmptyStorage(t *testing.T) {
@@ -35,7 +35,6 @@ func TestRootHandler_OK_EmptyStorage(t *testing.T) {
 	bodyBytes, _ := io.ReadAll(res.Body)
 	body := string(bodyBytes)
 
-	// Проверяем, что это вообще похоже на страницу
 	if !strings.Contains(body, "<html>") || !strings.Contains(body, "</html>") {
 		t.Fatalf("body does not look like html: %q", body)
 	}
@@ -47,11 +46,10 @@ func TestRootHandler_OK_EmptyStorage(t *testing.T) {
 func TestRootHandler_OK_WithMetrics(t *testing.T) {
 	ms := memStorage.NewMemStorage()
 
-	// подготовка данных
 	ms.SetGauge("Alloc", 123.5)
 	ms.SetGauge("RandomValue", 0.25)
 	ms.AddCounter("PollCount", 10)
-	ms.AddCounter("PollCount", 2) // чтобы показать накопление
+	ms.AddCounter("PollCount", 2)
 
 	h := RootHandler(ms)
 
@@ -70,8 +68,6 @@ func TestRootHandler_OK_WithMetrics(t *testing.T) {
 	bodyBytes, _ := io.ReadAll(res.Body)
 	body := string(bodyBytes)
 
-	// Не проверяем порядок, просто наличие фрагментов.
-	// Gauge печатается через %f, значит будет 6 знаков после точки.
 	if !strings.Contains(body, "<li>Alloc: 123.500000</li>") {
 		t.Fatalf("missing Alloc metric in body: %q", body)
 	}

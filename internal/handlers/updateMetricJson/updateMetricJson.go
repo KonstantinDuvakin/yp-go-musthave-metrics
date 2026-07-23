@@ -1,4 +1,4 @@
-package handler
+package updateMetricJson
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func UpdateMetricJson(storage storage.ServerStorage) http.HandlerFunc {
+func UpdateMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req models.Metrics
 
@@ -40,7 +40,12 @@ func UpdateMetricJson(storage storage.ServerStorage) http.HandlerFunc {
 				rw.Write([]byte("Delta for type \"counter\" is required"))
 				return
 			}
-			storage.AddCounter(req.ID, *req.Delta)
+			err := storage.AddCounter(req.ID, *req.Delta)
+			if err != nil {
+				logger.Log.Error("Error adding counter", zap.Error(err))
+				http.Error(rw, "internal error", http.StatusInternalServerError)
+				return
+			}
 
 		case models.Gauge:
 			if req.Value == nil {
@@ -49,7 +54,12 @@ func UpdateMetricJson(storage storage.ServerStorage) http.HandlerFunc {
 				rw.Write([]byte("Value for type \"gauge\" is required"))
 				return
 			}
-			storage.SetGauge(req.ID, *req.Value)
+			err := storage.SetGauge(req.ID, *req.Value)
+			if err != nil {
+				logger.Log.Error("Error setting gauge", zap.Error(err))
+				http.Error(rw, "internal error", http.StatusInternalServerError)
+				return
+			}
 
 		default:
 			rw.WriteHeader(http.StatusBadRequest)

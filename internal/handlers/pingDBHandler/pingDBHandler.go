@@ -1,4 +1,4 @@
-package handler
+package pingDBHandler
 
 import (
 	"net/http"
@@ -12,6 +12,11 @@ type Pinger interface {
 
 func PingDBHandler(pinger Pinger) http.HandlerFunc {
 	return func(rw http.ResponseWriter, req *http.Request) {
+		if pinger == nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		if err := pinger.Ping(); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return

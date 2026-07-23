@@ -1,15 +1,17 @@
-package memStorage
+package syncMemStorage
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
 )
 
 func TestSaveAndRestore_RoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 
-	src := NewMemStorage()
+	src := memStorage.NewMemStorage()
 	src.AddCounter("PollCount", 5)
 	src.SetGauge("Alloc", 3.5)
 
@@ -17,15 +19,15 @@ func TestSaveAndRestore_RoundTrip(t *testing.T) {
 		t.Fatalf("SaveMetricsToFile: %v", err)
 	}
 
-	dst := NewMemStorage()
+	dst := memStorage.NewMemStorage()
 	if err := dst.RestoreFromFile(path); err != nil {
 		t.Fatalf("RestoreFromFile: %v", err)
 	}
 
-	if got, ok := dst.GetCounter("PollCount"); !ok || got != 5 {
+	if got, ok, _ := dst.GetCounter("PollCount"); !ok || got != 5 {
 		t.Errorf("counter PollCount = %d, ok=%v; want 5, true", got, ok)
 	}
-	if got, ok := dst.GetGauge("Alloc"); !ok || got != 3.5 {
+	if got, ok, _ := dst.GetGauge("Alloc"); !ok || got != 3.5 {
 		t.Errorf("gauge Alloc = %v, ok=%v; want 3.5, true", got, ok)
 	}
 }
@@ -33,7 +35,7 @@ func TestSaveAndRestore_RoundTrip(t *testing.T) {
 func TestSaveMetricsToFile_WritesToGivenPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "out.json")
 
-	ms := NewMemStorage()
+	ms := memStorage.NewMemStorage()
 	ms.AddCounter("c", 1)
 
 	if err := ms.SaveMetricsToFile(path); err != nil {
@@ -50,7 +52,7 @@ func TestSaveMetricsToFile_WritesToGivenPath(t *testing.T) {
 }
 
 func TestRestoreFromFile_MissingFile(t *testing.T) {
-	ms := NewMemStorage()
+	ms := memStorage.NewMemStorage()
 
 	err := ms.RestoreFromFile(filepath.Join(t.TempDir(), "does-not-exist.json"))
 	if err == nil {
@@ -61,21 +63,21 @@ func TestRestoreFromFile_MissingFile(t *testing.T) {
 func TestSyncMemStorage_PersistsAfterClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sync.json")
 
-	store := NewSyncMemStorage(NewMemStorage(), path)
+	store := NewSyncMemStorage(memStorage.NewMemStorage(), path)
 	store.AddCounter("PollCount", 7)
 	store.SetGauge("Alloc", 2.5)
 
 	store.Close()
 
-	restored := NewMemStorage()
+	restored := memStorage.NewMemStorage()
 	if err := restored.RestoreFromFile(path); err != nil {
 		t.Fatalf("RestoreFromFile после Close: %v", err)
 	}
 
-	if got, ok := restored.GetCounter("PollCount"); !ok || got != 7 {
+	if got, ok, _ := restored.GetCounter("PollCount"); !ok || got != 7 {
 		t.Errorf("counter PollCount = %d, ok=%v; want 7, true", got, ok)
 	}
-	if got, ok := restored.GetGauge("Alloc"); !ok || got != 2.5 {
+	if got, ok, _ := restored.GetGauge("Alloc"); !ok || got != 2.5 {
 		t.Errorf("gauge Alloc = %v, ok=%v; want 2.5, true", got, ok)
 	}
 }

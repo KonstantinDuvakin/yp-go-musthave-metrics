@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
 )
 
 func TestSaveToFile_ZeroInterval(t *testing.T) {
@@ -55,7 +55,7 @@ func TestSaveToFile_GracefulSaveOnCancel(t *testing.T) {
 	if err := check.RestoreFromFile(path); err != nil {
 		t.Fatalf("RestoreFromFile: %v", err)
 	}
-	if got, ok := check.GetCounter("PollCount"); !ok || got != 42 {
+	if got, ok, _ := check.GetCounter("PollCount"); !ok || got != 42 {
 		t.Errorf("после отмены: counter = %d, ok=%v; want 42, true", got, ok)
 	}
 }

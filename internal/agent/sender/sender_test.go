@@ -11,10 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
 	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -51,7 +52,7 @@ func TestSendMetrics(t *testing.T) {
 			ms := memStorage.NewMemStorage()
 
 			r := chi.NewRouter()
-			r.Post("/update/{type}/{name}/{value}", handler.UpdateHandler(ms))
+			r.Post("/update/{type}/{name}/{value}", updateHandler.UpdateHandler(ms))
 
 			request := httptest.NewRequest(http.MethodPost, tt.args.url, nil)
 			w := httptest.NewRecorder()
@@ -138,7 +139,7 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(gzipmw.Middleware)
-	r.Post("/update", handler.UpdateMetricJson(store))
+	r.Post("/update", updateMetricJson.UpdateMetricJson(store))
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
@@ -149,7 +150,10 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 		t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
 	}
 
-	got, ok := store.GetCounter(body.ID)
+	got, ok, err := store.GetCounter(body.ID)
+	if err != nil {
+		t.Fatal("Ошибка получения counter")
+	}
 	if !ok {
 		t.Fatalf("counter %q не сохранён — round-trip через gzip не сработал", body.ID)
 	}

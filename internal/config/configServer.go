@@ -21,7 +21,7 @@ func NewConfigServer() *ServerConfig {
 	flag.IntVar(&sc.StoreInterval, "i", 3, "Interval in seconds for savings in storage file.")
 	flag.StringVar(&sc.FileStoragePath, "f", "metrics_log.txt", "The file storage path.")
 	flag.BoolVar(&sc.Restore, "r", true, "Flag for restoring data from storage file.")
-	flag.StringVar(&sc.DB, "d", "host=localhost user=metrics_user password=metrics_user dbname=metrics sslmode=disable", "Flag for database address.")
+	flag.StringVar(&sc.DB, "d", "", "Flag for database address.")
 
 	return sc
 }

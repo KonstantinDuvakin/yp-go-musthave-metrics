@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"flag"
 	"net/http"
@@ -12,12 +11,15 @@ import (
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricHandler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricJson"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/pingDBHandler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/rootHandler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -27,56 +29,39 @@ func main() {
 	flag.Parse()
 	c.ApplyEnv()
 
-	base := memStorage.NewMemStorage()
-
 	err := logger.InitializeLogger("info")
 	if err != nil {
 		logger.Log.Warn("Failed to initialize logger", zap.Error(err))
 	}
 
-	if c.Restore {
-		if err = base.RestoreFromFile(c.FileStoragePath); err != nil {
-			logger.Log.Warn("Failed to restore data from file", zap.Error(err))
-		}
-	}
-
-	var store storage.ServerStorage = base
-	var shutdown = func() {}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if c.StoreInterval == 0 {
-		syncStore := memStorage.NewSyncMemStorage(store, c.FileStoragePath)
-		store = syncStore
-		shutdown = syncStore.Close
-	} else {
-		done := make(chan struct{})
-		go service.SaveToFile(ctx, c, store, done)
-		shutdown = func() { <-done }
+	store, db, shutdown, err := serverStorage.NewStorage(ctx, c)
+	if err != nil {
+		logger.Log.Fatal("Failed to initialize storage", zap.Error(err))
 	}
 
-	db, err := sql.Open("pgx", c.DB)
-	if err != nil {
-		logger.Log.Fatal("db connection error: ", zap.Error(err))
+	var pinger pingDBHandler.Pinger
+	if db != nil {
+		pinger = db
 	}
-	defer db.Close()
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
 		r.Use(gzip.Middleware)
 
-		r.Get("/", handler.RootHandler(store))
+		r.Get("/", rootHandler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", handler.UpdateMetricJson(store))
-			r.Post(`/{type}/{name}/{value}`, handler.UpdateHandler(store))
+			r.Post("/", updateMetricJson.UpdateMetricJson(store))
+			r.Post(`/{type}/{name}/{value}`, updateHandler.UpdateHandler(store))
 		})
 		r.Route("/value", func(r chi.Router) {
-			r.Post("/", handler.GetMetricJson(store))
-			r.Get(`/{type}/{name}`, handler.GetMetricHandler(store))
+			r.Post("/", getMetricJson.GetMetricJson(store))
+			r.Get(`/{type}/{name}`, getMetricHandler.GetMetricHandler(store))
 		})
-		r.Get("/ping", handler.PingDBHandler(db))
+		r.Get("/ping", pingDBHandler.PingDBHandler(pinger))
 	})
 
 	server := &http.Server{
