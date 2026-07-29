@@ -9,6 +9,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/migrations"
 )
 
@@ -107,4 +108,62 @@ func TestDBStorage_GetAllCounters(t *testing.T) {
 	all, err := s.GetAllCounters()
 	require.NoError(t, err)
 	require.Equal(t, map[string]int64{"x": 3, "y": 7}, map[string]int64(all))
+}
+
+func TestDBStorage_SaveMetricsBatch(t *testing.T) {
+	s := newTestStorage(t)
+
+	gv := 3.14
+	var cd int64 = 7
+	batch := []models.Metrics{
+		{ID: "Alloc", MType: models.Gauge, Value: &gv},
+		{ID: "PollCount", MType: models.Counter, Delta: &cd},
+	}
+	require.NoError(t, s.SaveMetricsBatch(context.Background(), batch))
+
+	g, ok, err := s.GetGauge("Alloc")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 3.14, g)
+
+	c, ok, err := s.GetCounter("PollCount")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, int64(7), c)
+}
+
+func TestDBStorage_SaveMetricsBatch_CounterAccumulates(t *testing.T) {
+	s := newTestStorage(t)
+
+	var d1, d2 int64 = 10, 5
+	require.NoError(t, s.SaveMetricsBatch(context.Background(), []models.Metrics{
+		{ID: "PollCount", MType: models.Counter, Delta: &d1},
+		{ID: "PollCount", MType: models.Counter, Delta: &d2},
+	}))
+
+	c, ok, err := s.GetCounter("PollCount")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, int64(15), c, "счётчики в одном батче должны накопиться (10+5)")
+}
+
+// Ключевой тест: при ошибке на любой метрике весь батч откатывается (атомарность транзакции).
+func TestDBStorage_SaveMetricsBatch_Atomic(t *testing.T) {
+	s := newTestStorage(t)
+
+	gv := 1.0
+	batch := []models.Metrics{
+		{ID: "Alloc", MType: models.Gauge, Value: &gv},       // валидный, пишется первым
+		{ID: "PollCount", MType: models.Counter, Delta: nil}, // битый counter → ошибка
+	}
+	require.Error(t, s.SaveMetricsBatch(context.Background(), batch))
+
+	_, ok, err := s.GetGauge("Alloc")
+	require.NoError(t, err)
+	require.False(t, ok, "при ошибке в батче ранее записанный gauge должен быть откатан")
+}
+
+func TestDBStorage_SaveMetricsBatch_Empty(t *testing.T) {
+	s := newTestStorage(t)
+	require.NoError(t, s.SaveMetricsBatch(context.Background(), nil))
 }

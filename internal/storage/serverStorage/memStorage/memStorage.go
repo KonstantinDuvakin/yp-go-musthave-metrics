@@ -2,8 +2,10 @@ package memStorage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"sync"
@@ -126,4 +128,24 @@ func (ms *MemStorage) RestoreFromFile(filename string) error {
 	}
 
 	return scanner.Err()
+}
+
+func (ms *MemStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	for _, m := range metrics {
+		switch m.MType {
+		case models.Gauge:
+			if m.Value == nil {
+				return fmt.Errorf("gauge %s: value is nil", m.ID)
+			}
+			_ = ms.SetGauge(m.ID, *m.Value)
+		case models.Counter:
+			if m.Delta == nil {
+				return fmt.Errorf("counter %s: delta is nil", m.ID)
+			}
+			_ = ms.AddCounter(m.ID, *m.Delta)
+		default:
+			return fmt.Errorf("unknown metric type: %s", m.MType)
+		}
+	}
+	return nil
 }

@@ -1,7 +1,10 @@
 package syncMemStorage
 
 import (
+	"context"
+
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"go.uber.org/zap"
 )
@@ -54,6 +57,14 @@ func (s *SyncMemStorage) startSaving() {
 		logger.Log.Warn("Could not save metrics to file", zap.String("path", s.path), zap.Error(err))
 	}
 	close(s.isFinishingFlag)
+}
+
+func (s *SyncMemStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	if err := s.store.SaveMetricsBatch(ctx, metrics); err != nil {
+		return err
+	}
+	s.markSaving()
+	return nil
 }
 
 func (s *SyncMemStorage) GetGauge(field string) (float64, bool, error) {

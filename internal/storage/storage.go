@@ -1,5 +1,11 @@
 package storage
 
+import (
+	"context"
+
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+)
+
 type GaugeMap map[string]float64
 type CounterMap map[string]int64
 
@@ -10,6 +16,7 @@ type MetricsStorage interface {
 	GetCounter(string) (int64, bool, error)
 	GetAllGauges() (GaugeMap, error)
 	GetAllCounters() (CounterMap, error)
+	SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error
 }
 
 type FilePersistentStorage interface {

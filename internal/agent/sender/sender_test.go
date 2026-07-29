@@ -200,3 +200,69 @@ func TestUrlBuilder(t *testing.T) {
 		})
 	}
 }
+
+func TestSendMetricsBatch(t *testing.T) {
+	gv := 1.5
+	var cd int64 = 10
+	batch := []models.Metrics{
+		{ID: "Alloc", MType: models.Gauge, Value: &gv},
+		{ID: "PollCount", MType: models.Counter, Delta: &cd},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/updates" {
+			t.Errorf("path = %s, want /updates", r.URL.Path)
+		}
+		if got := r.Header.Get("Content-Encoding"); got != "gzip" {
+			t.Errorf("Content-Encoding = %q, want gzip", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Fatalf("тело не является валидным gzip: %v", err)
+		}
+		defer zr.Close()
+
+		data, err := io.ReadAll(zr)
+		if err != nil {
+			t.Fatalf("чтение распакованного тела: %v", err)
+		}
+
+		var got []models.Metrics
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("тело не является валидным []Metrics JSON: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("получено %d метрик, ожидалось 2", len(got))
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	if err := s.SendMetricsBatch(context.Background(), batch); err != nil {
+		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
+	}
+}
+
+func TestSendMetricsBatch_ErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+
+	gv := 1.0
+	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
+	if err := s.SendMetricsBatch(context.Background(), batch); err == nil {
+		t.Fatal("ожидалась ошибка при статусе 500, получили nil")
+	}
+}

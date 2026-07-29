@@ -15,6 +15,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricJson"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/pingDBHandler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/rootHandler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateBatchMetrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
@@ -56,6 +57,9 @@ func main() {
 		r.Route("/update", func(r chi.Router) {
 			r.Post("/", updateMetricJson.UpdateMetricJson(store))
 			r.Post(`/{type}/{name}/{value}`, updateHandler.UpdateHandler(store))
+		})
+		r.Route("/updates", func(r chi.Router) {
+			r.Post("/", updateBatchMetrics.UpdateBatchMetrics(store))
 		})
 		r.Route("/value", func(r chi.Router) {
 			r.Post("/", getMetricJson.GetMetricJson(store))

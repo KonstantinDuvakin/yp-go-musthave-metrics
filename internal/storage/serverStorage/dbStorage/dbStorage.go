@@ -4,33 +4,48 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
+	"go.uber.org/zap"
 )
 
 type DBStorage struct {
 	db *sql.DB
 }
 
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
 func NewDBStorage(db *sql.DB) *DBStorage {
 	return &DBStorage{db}
 }
 
-func (dbs *DBStorage) SetGauge(field string, value float64) error {
-	_, err := dbs.db.ExecContext(context.Background(),
+func execSetGauge(ctx context.Context, e execer, field string, value float64) error {
+	_, err := e.ExecContext(ctx,
 		`INSERT INTO metrics (id, mtype, value) VALUES ($1, $2, $3)
          ON CONFLICT (id, mtype) DO UPDATE SET value = EXCLUDED.value`,
 		field, models.Gauge, value)
 	return err
 }
 
-func (dbs *DBStorage) AddCounter(field string, value int64) error {
-	_, err := dbs.db.ExecContext(context.Background(),
+func (dbs *DBStorage) SetGauge(field string, value float64) error {
+	return execSetGauge(context.Background(), dbs.db, field, value)
+}
+
+func execAddCounter(ctx context.Context, e execer, field string, value int64) error {
+	_, err := e.ExecContext(ctx,
 		`INSERT INTO metrics (id, mtype, delta) VALUES ($1, $2, $3)
          ON CONFLICT (id, mtype) DO UPDATE SET delta = metrics.delta + EXCLUDED.delta`,
 		field, models.Counter, value)
 	return err
+}
+
+func (dbs *DBStorage) AddCounter(field string, value int64) error {
+	return execAddCounter(context.Background(), dbs.db, field, value)
 }
 
 func (dbs *DBStorage) GetGauge(field string) (float64, bool, error) {
@@ -129,4 +144,42 @@ func (dbs *DBStorage) GetAllCounters() (storage.CounterMap, error) {
 	}
 
 	return counterMap, nil
+}
+
+func (dbs *DBStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	tx, err := dbs.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, metric := range metrics {
+		if metric.ID == "" {
+			return errors.New("metric id should not be empty")
+		}
+
+		switch metric.MType {
+		case models.Gauge:
+			if metric.Value == nil {
+				logger.Log.Error("Value is omitted", zap.String("type", metric.MType))
+				return fmt.Errorf("value for type \"gauge\" is required")
+			}
+			err = execSetGauge(ctx, tx, metric.ID, *metric.Value)
+		case models.Counter:
+			if metric.Delta == nil {
+				logger.Log.Error("Delta is omitted", zap.String("type", metric.MType))
+				return fmt.Errorf("delta for type \"counter\" is required")
+			}
+			err = execAddCounter(ctx, tx, metric.ID, *metric.Delta)
+		default:
+			return fmt.Errorf("unknown metric type: %s", metric.MType)
+		}
+
+		if err != nil {
+			logger.Log.Error("Error setting metric", zap.Error(err))
+			return fmt.Errorf("error setting metric: %s", metric.ID)
+		}
+	}
+
+	return tx.Commit()
 }
