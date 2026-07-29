@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
@@ -33,7 +34,10 @@ func execSetGauge(ctx context.Context, e execer, field string, value float64) er
 }
 
 func (dbs *DBStorage) SetGauge(field string, value float64) error {
-	return execSetGauge(context.Background(), dbs.db, field, value)
+	ctx := context.Background()
+	return retry.Do(ctx, retry.IsPGRetriable, func() error {
+		return execSetGauge(ctx, dbs.db, field, value)
+	})
 }
 
 func execAddCounter(ctx context.Context, e execer, field string, value int64) error {
@@ -45,10 +49,13 @@ func execAddCounter(ctx context.Context, e execer, field string, value int64) er
 }
 
 func (dbs *DBStorage) AddCounter(field string, value int64) error {
-	return execAddCounter(context.Background(), dbs.db, field, value)
+	ctx := context.Background()
+	return retry.Do(ctx, retry.IsPGRetriable, func() error {
+		return execAddCounter(ctx, dbs.db, field, value)
+	})
 }
 
-func (dbs *DBStorage) GetGauge(field string) (float64, bool, error) {
+func (dbs *DBStorage) getGaugeOnce(field string) (float64, bool, error) {
 	var value float64
 
 	row := dbs.db.QueryRowContext(context.Background(), "SELECT value FROM metrics WHERE id = $1 AND mtype = $2", field, models.Gauge)
@@ -66,7 +73,18 @@ func (dbs *DBStorage) GetGauge(field string) (float64, bool, error) {
 	return value, true, nil
 }
 
-func (dbs *DBStorage) GetCounter(field string) (int64, bool, error) {
+func (dbs *DBStorage) GetGauge(field string) (float64, bool, error) {
+	var value float64
+	var found bool
+	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+		v, ok, e := dbs.getGaugeOnce(field)
+		value, found = v, ok
+		return e
+	})
+	return value, found, err
+}
+
+func (dbs *DBStorage) getCounterOnce(field string) (int64, bool, error) {
 	var value int64
 
 	row := dbs.db.QueryRowContext(context.Background(), "SELECT delta FROM metrics WHERE id = $1 AND mtype = $2", field, models.Counter)
@@ -84,7 +102,18 @@ func (dbs *DBStorage) GetCounter(field string) (int64, bool, error) {
 	return value, true, nil
 }
 
-func (dbs *DBStorage) GetAllGauges() (storage.GaugeMap, error) {
+func (dbs *DBStorage) GetCounter(field string) (int64, bool, error) {
+	var value int64
+	var found bool
+	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+		v, ok, e := dbs.getCounterOnce(field)
+		value, found = v, ok
+		return e
+	})
+	return value, found, err
+}
+
+func (dbs *DBStorage) getAllGaugesOnce() (storage.GaugeMap, error) {
 	gaugeMap := make(storage.GaugeMap)
 
 	rows, err := dbs.db.QueryContext(context.Background(), "SELECT id, value FROM metrics WHERE mtype = $1", models.Gauge)
@@ -115,7 +144,17 @@ func (dbs *DBStorage) GetAllGauges() (storage.GaugeMap, error) {
 	return gaugeMap, nil
 }
 
-func (dbs *DBStorage) GetAllCounters() (storage.CounterMap, error) {
+func (dbs *DBStorage) GetAllGauges() (storage.GaugeMap, error) {
+	var gaugeMap storage.GaugeMap
+	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+		gm, e := dbs.getAllGaugesOnce()
+		gaugeMap = gm
+		return e
+	})
+	return gaugeMap, err
+}
+
+func (dbs *DBStorage) getAllCountersOnce() (storage.CounterMap, error) {
 	counterMap := make(storage.CounterMap)
 
 	rows, err := dbs.db.QueryContext(context.Background(), "SELECT id, delta FROM metrics WHERE mtype = $1", models.Counter)
@@ -146,7 +185,17 @@ func (dbs *DBStorage) GetAllCounters() (storage.CounterMap, error) {
 	return counterMap, nil
 }
 
-func (dbs *DBStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+func (dbs *DBStorage) GetAllCounters() (storage.CounterMap, error) {
+	var counterMap storage.CounterMap
+	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+		cm, e := dbs.getAllCountersOnce()
+		counterMap = cm
+		return e
+	})
+	return counterMap, err
+}
+
+func (dbs *DBStorage) saveBatchOnce(ctx context.Context, metrics []models.Metrics) error {
 	tx, err := dbs.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -182,4 +231,10 @@ func (dbs *DBStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Met
 	}
 
 	return tx.Commit()
+}
+
+func (dbs *DBStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	return retry.Do(ctx, retry.IsPGRetriable, func() error {
+		return dbs.saveBatchOnce(ctx, metrics)
+	})
 }

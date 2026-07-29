@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/go-resty/resty/v2"
 )
@@ -62,22 +63,24 @@ func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics)
 		return err
 	}
 
-	resp, err := s.client.R().
-		SetContext(ctx).
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(bufGZip.Bytes()).
-		Post("/updates")
+	return retry.Do(ctx, retry.IsHttpRetriable, func() error {
+		resp, err := s.client.R().
+			SetContext(ctx).
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Content-Encoding", "gzip").
+			SetBody(bufGZip.Bytes()).
+			Post("/updates")
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	if resp.IsError() {
-		return fmt.Errorf("batch upload failed: status %d", resp.StatusCode())
-	}
+		if resp.IsError() {
+			return fmt.Errorf("batch upload failed: status %d", resp.StatusCode())
+		}
 
-	return nil
+		return nil
+	})
 }
 
 func URLBuilder(metricType, name, value string) string {
