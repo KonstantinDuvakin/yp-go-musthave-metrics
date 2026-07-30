@@ -19,6 +19,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage"
 	"github.com/go-chi/chi/v5"
@@ -52,6 +53,7 @@ func main() {
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
 		r.Use(gzip.Middleware)
+		r.Use(hash.HashMiddleware(c.Key))
 
 		r.Get("/", rootHandler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {

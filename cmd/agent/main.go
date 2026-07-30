@@ -28,5 +28,5 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	agent.Run(ctx, pollInterval, reportInterval)
+	agent.Run(ctx, pollInterval, reportInterval, c.Key)
 }

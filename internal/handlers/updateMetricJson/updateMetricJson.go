@@ -2,7 +2,6 @@ package updateMetricJson
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
@@ -18,7 +17,6 @@ func UpdateMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 		dec := json.NewDecoder(r.Body)
 
 		if err := dec.Decode(&req); err != nil {
-			fmt.Println(err)
 			logger.Log.Error("Invalid json", zap.Error(err))
 			rw.WriteHeader(http.StatusBadRequest)
 			rw.Write([]byte("Invalid json"))

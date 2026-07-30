@@ -13,6 +13,7 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
@@ -222,6 +223,9 @@ func TestSendMetricsBatch(t *testing.T) {
 		if got := r.Header.Get("Content-Type"); got != "application/json" {
 			t.Errorf("Content-Type = %q, want application/json", got)
 		}
+		if got := r.Header.Get("HashSHA256"); got != "" {
+			t.Errorf("без ключа заголовок HashSHA256 не должен ставиться, got %q", got)
+		}
 
 		zr, err := gzip.NewReader(r.Body)
 		if err != nil {
@@ -247,7 +251,45 @@ func TestSendMetricsBatch(t *testing.T) {
 	defer srv.Close()
 
 	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
-	if err := s.SendMetricsBatch(context.Background(), batch); err != nil {
+	if err := s.SendMetricsBatch(context.Background(), batch, ""); err != nil {
+		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
+	}
+}
+
+// При заданном ключе агент должен слать непустой заголовок HashSHA256,
+// равный hash(тело, ключ) от несжатого JSON.
+func TestSendMetricsBatch_WithKey(t *testing.T) {
+	const key = "secret"
+	gv := 2.0
+	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHash := r.Header.Get("HashSHA256")
+		if gotHash == "" {
+			t.Fatal("при заданном ключе заголовок HashSHA256 должен присутствовать")
+		}
+
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Fatalf("тело не является валидным gzip: %v", err)
+		}
+		defer zr.Close()
+
+		data, err := io.ReadAll(zr)
+		if err != nil {
+			t.Fatalf("чтение распакованного тела: %v", err)
+		}
+
+		if want := hash.CreateHeaderHash(data, key); gotHash != want {
+			t.Errorf("HashSHA256 = %q, ожидалось %q", gotHash, want)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	if err := s.SendMetricsBatch(context.Background(), batch, key); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
 }
@@ -262,7 +304,7 @@ func TestSendMetricsBatch_ErrorStatus(t *testing.T) {
 
 	gv := 1.0
 	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
-	if err := s.SendMetricsBatch(context.Background(), batch); err == nil {
+	if err := s.SendMetricsBatch(context.Background(), batch, ""); err == nil {
 		t.Fatal("ожидалась ошибка при статусе 500, получили nil")
 	}
 }

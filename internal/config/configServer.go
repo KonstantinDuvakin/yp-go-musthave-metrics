@@ -12,6 +12,7 @@ type ServerConfig struct {
 	FileStoragePath string
 	Restore         bool
 	DB              string
+	Key             string
 }
 
 func NewConfigServer() *ServerConfig {
@@ -22,6 +23,7 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.FileStoragePath, "f", "metrics_log.txt", "The file storage path.")
 	flag.BoolVar(&sc.Restore, "r", true, "Flag for restoring data from storage file.")
 	flag.StringVar(&sc.DB, "d", "", "Flag for database address.")
+	flag.StringVar(&sc.Key, "k", "", "key for hash.")
 
 	return sc
 }
@@ -49,5 +51,9 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envDatabaseAddress := os.Getenv("DATABASE_DSN"); envDatabaseAddress != "" {
 		sc.DB = envDatabaseAddress
+	}
+
+	if envKey := os.Getenv("KEY"); envKey != "" {
+		sc.Key = envKey
 	}
 }

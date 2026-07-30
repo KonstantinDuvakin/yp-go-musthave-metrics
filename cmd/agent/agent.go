@@ -23,7 +23,7 @@ func New(storage *agentStorage.AgentStorage, sender *sender.Sender) *Agent {
 	}
 }
 
-func (a *Agent) Run(ctx context.Context, poll, report time.Duration) {
+func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey string) {
 	pollTicker := time.NewTicker(poll)
 	defer pollTicker.Stop()
 
@@ -67,7 +67,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration) {
 				continue
 			}
 
-			err := a.sender.SendMetricsBatch(ctx, metricsBatch)
+			err := a.sender.SendMetricsBatch(ctx, metricsBatch, hashKey)
 			if err != nil {
 				fmt.Printf("Couldn't sent metrics\nError: %v\n", err)
 			}

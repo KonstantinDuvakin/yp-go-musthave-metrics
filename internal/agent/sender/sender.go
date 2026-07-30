@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/go-resty/resty/v2"
@@ -52,24 +53,41 @@ func (s *Sender) SendMetricsJson(ctx context.Context, body models.Metrics) error
 	return err
 }
 
-func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics, hashKey string) error {
 	bufGZip := bytes.NewBuffer(nil)
 	zw := gzip.NewWriter(bufGZip)
-	if err := json.NewEncoder(zw).Encode(metrics); err != nil {
+
+	data, err := json.Marshal(metrics)
+	if err != nil {
 		return err
 	}
 
-	if err := zw.Close(); err != nil {
+	var sign string
+	if hashKey != "" {
+		sign = hash.CreateHeaderHash(data, hashKey)
+	}
+
+	_, err = zw.Write(data)
+	if err != nil {
+		return err
+	}
+
+	if err = zw.Close(); err != nil {
 		return err
 	}
 
 	return retry.Do(ctx, retry.IsHttpRetriable, func() error {
-		resp, err := s.client.R().
+		req := s.client.R().
 			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip").
-			SetBody(bufGZip.Bytes()).
-			Post("/updates")
+			SetBody(bufGZip.Bytes())
+
+		if hashKey != "" {
+			req.SetHeader("HashSHA256", sign)
+		}
+
+		resp, err := req.Post("/updates")
 
 		if err != nil {
 			return err
