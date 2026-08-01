@@ -26,10 +26,9 @@ func newTestStorage(t *testing.T) *DBStorage {
 
 	require.NoError(t, pool.Ping(context.Background()), "БД недоступна по DATABASE_DSN")
 
-	// goose работает с database/sql — берём временную обёртку поверх пула
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	require.NoError(t, migrations.RunMigrations(sqlDB))
-	sqlDB.Close() // закрывает только обёртку, пул живёт
+	sqlDB.Close()
 
 	_, err = pool.Exec(context.Background(), "TRUNCATE metrics")
 	require.NoError(t, err)
@@ -151,14 +150,13 @@ func TestDBStorage_SaveMetricsBatch_CounterAccumulates(t *testing.T) {
 	require.Equal(t, int64(15), c, "счётчики в одном батче должны накопиться (10+5)")
 }
 
-// Ключевой тест: при ошибке на любой метрике весь батч откатывается (атомарность транзакции).
 func TestDBStorage_SaveMetricsBatch_Atomic(t *testing.T) {
 	s := newTestStorage(t)
 
 	gv := 1.0
 	batch := []models.Metrics{
-		{ID: "Alloc", MType: models.Gauge, Value: &gv},       // валидный, пишется первым
-		{ID: "PollCount", MType: models.Counter, Delta: nil}, // битый counter → ошибка
+		{ID: "Alloc", MType: models.Gauge, Value: &gv},
+		{ID: "PollCount", MType: models.Counter, Delta: nil},
 	}
 	require.Error(t, s.SaveMetricsBatch(context.Background(), batch))
 

@@ -11,8 +11,6 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 )
 
-// Без DSN и с StoreInterval==0 фабрика должна отдать sync-хранилище в памяти,
-// db == nil (пула нет), а shutdown — корректно завершиться.
 func TestNewStorage_MemorySync(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	c := &config.ServerConfig{StoreInterval: 0, FileStoragePath: path, Restore: false}
@@ -24,11 +22,9 @@ func TestNewStorage_MemorySync(t *testing.T) {
 	require.NotNil(t, shutdown)
 
 	require.NoError(t, store.SetGauge("Alloc", 1.5))
-	shutdown() // syncStore.Close: финальное сохранение + завершение горутины
+	shutdown()
 }
 
-// Без DSN и с StoreInterval>0 фабрика запускает периодическое сохранение в горутине.
-// Отмена контекста должна привести к завершению, а shutdown (<-done) — вернуться.
 func TestNewStorage_MemoryInterval(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	c := &config.ServerConfig{StoreInterval: 3600, FileStoragePath: path, Restore: false}
@@ -41,12 +37,10 @@ func TestNewStorage_MemoryInterval(t *testing.T) {
 	require.Nil(t, db)
 	require.NotNil(t, shutdown)
 
-	cancel()   // останавливаем фоновую SaveToFile
-	shutdown() // должен разблокироваться после закрытия done
+	cancel()
+	shutdown()
 }
 
-// С DATABASE_DSN фабрика должна вернуть dbStorage и живой пул для /ping.
-// Пропускается, если БД не сконфигурирована в окружении.
 func TestNewStorage_DB(t *testing.T) {
 	dsn := os.Getenv("DATABASE_DSN")
 	if dsn == "" {
