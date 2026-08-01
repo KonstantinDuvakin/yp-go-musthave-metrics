@@ -61,6 +61,6 @@ func TestNewStorage_DB(t *testing.T) {
 	require.NotNil(t, db, "с DATABASE_DSN пул возвращается для /ping")
 	require.NotNil(t, shutdown)
 
-	require.NoError(t, db.Ping())
+	require.NoError(t, db.Ping(context.Background()))
 	shutdown() // db.Close()
 }

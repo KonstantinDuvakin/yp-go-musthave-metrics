@@ -2,11 +2,11 @@ package dbStorage
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
@@ -21,18 +21,22 @@ func newTestStorage(t *testing.T) *DBStorage {
 		t.Skip("DATABASE_DSN не задан — пропускаю интеграционный тест")
 	}
 
-	db, err := sql.Open("pgx", dsn)
+	pool, err := pgxpool.New(context.Background(), dsn)
 	require.NoError(t, err)
 
-	require.NoError(t, db.PingContext(context.Background()), "БД недоступна по DATABASE_DSN")
-	require.NoError(t, migrations.RunMigrations(db))
+	require.NoError(t, pool.Ping(context.Background()), "БД недоступна по DATABASE_DSN")
 
-	_, err = db.Exec("TRUNCATE metrics")
+	// goose работает с database/sql — берём временную обёртку поверх пула
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	require.NoError(t, migrations.RunMigrations(sqlDB))
+	sqlDB.Close() // закрывает только обёртку, пул живёт
+
+	_, err = pool.Exec(context.Background(), "TRUNCATE metrics")
 	require.NoError(t, err)
 
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { pool.Close() })
 
-	return NewDBStorage(db)
+	return NewDBStorage(pool)
 }
 
 func TestDBStorage_SetGauge(t *testing.T) {

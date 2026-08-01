@@ -2,9 +2,9 @@ package serverStorage
 
 import (
 	"context"
-	"database/sql"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // регистрирует драйвер "pgx" для database/sql
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
@@ -17,15 +17,17 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.MetricsStorage, *sql.DB, func(), error) {
+func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.MetricsStorage, *pgxpool.Pool, func(), error) {
 	if config.DB != "" {
-		db, err := sql.Open("pgx", config.DB)
+		db, err := pgxpool.New(ctx, config.DB)
 		if err != nil {
 			logger.Log.Error("db connection error: ", zap.Error(err))
 			return nil, nil, nil, err
 		}
+		sqlDB := stdlib.OpenDBFromPool(db)
+		defer sqlDB.Close()
 
-		if err = migrations.RunMigrations(db); err != nil {
+		if err = migrations.RunMigrations(sqlDB); err != nil {
 			logger.Log.Error("migrations error", zap.Error(err))
 			db.Close()
 			return nil, nil, nil, err

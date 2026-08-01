@@ -2,6 +2,7 @@ package syncMemStorage
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
@@ -23,13 +24,19 @@ func NewSyncMemStorage(s storage.ServerStorage, path string) *SyncMemStorage {
 }
 
 func (s *SyncMemStorage) SetGauge(name string, value float64) error {
-	_ = s.store.SetGauge(name, value)
+	err := s.store.SetGauge(name, value)
+	if err != nil {
+		return fmt.Errorf("error setting metric: %s : %w", name, err)
+	}
 	s.markSaving()
 	return nil
 }
 
 func (s *SyncMemStorage) AddCounter(name string, value int64) error {
-	_ = s.store.AddCounter(name, value)
+	err := s.store.AddCounter(name, value)
+	if err != nil {
+		return fmt.Errorf("error setting metric: %s : %w", name, err)
+	}
 	s.markSaving()
 	return nil
 }

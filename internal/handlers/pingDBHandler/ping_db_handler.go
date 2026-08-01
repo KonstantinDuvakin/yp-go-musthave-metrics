@@ -1,23 +1,22 @@
 package pingDBHandler
 
 import (
+	"context"
 	"net/http"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Pinger interface {
-	Ping() error
+	Ping(ctx context.Context) error
 }
 
 func PingDBHandler(pinger Pinger) http.HandlerFunc {
-	return func(rw http.ResponseWriter, req *http.Request) {
+	return func(rw http.ResponseWriter, r *http.Request) {
 		if pinger == nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		if err := pinger.Ping(); err != nil {
+		if err := pinger.Ping(r.Context()); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}

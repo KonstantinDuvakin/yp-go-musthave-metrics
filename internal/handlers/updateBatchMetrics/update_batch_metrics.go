@@ -17,13 +17,13 @@ func UpdateBatchMetrics(store storage.MetricsStorage) http.HandlerFunc {
 		dec := json.NewDecoder(r.Body)
 
 		if err := dec.Decode(&req); err != nil {
-			logger.Log.Error("Invalid json", zap.Error(err))
 			rw.WriteHeader(http.StatusBadRequest)
 			rw.Write([]byte("Invalid json"))
 			return
 		}
 
 		if err := store.SaveMetricsBatch(r.Context(), req); err != nil {
+			logger.Log.Error("Failed to save metrics batch: ", zap.Error(err))
 			rw.WriteHeader(http.StatusInternalServerError)
 			rw.Write([]byte("Couldn't save metrics batch"))
 			return

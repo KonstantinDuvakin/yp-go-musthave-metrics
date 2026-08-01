@@ -26,7 +26,7 @@ func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
 		case models.Gauge:
 			val, ok, err := storage.GetGauge(metricName)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
@@ -39,7 +39,7 @@ func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
 		case models.Counter:
 			val, ok, err := storage.GetCounter(metricName)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 

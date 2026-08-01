@@ -1,6 +1,6 @@
 -- +goose Up
 CREATE TABLE metrics (
-    id text NOT NULL,
+    id varchar(20) NOT NULL,
     mtype text NOT NULL,
     delta bigint,
     value double precision,

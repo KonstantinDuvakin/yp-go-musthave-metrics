@@ -2,7 +2,6 @@ package updateMetricJson
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
@@ -18,15 +17,12 @@ func UpdateMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 		dec := json.NewDecoder(r.Body)
 
 		if err := dec.Decode(&req); err != nil {
-			fmt.Println(err)
-			logger.Log.Error("Invalid json", zap.Error(err))
 			rw.WriteHeader(http.StatusBadRequest)
 			rw.Write([]byte("Invalid json"))
 			return
 		}
 
 		if req.ID == "" {
-			logger.Log.Error("Id is omitted", zap.String("id", req.ID))
 			rw.WriteHeader(http.StatusBadRequest)
 			rw.Write([]byte("Id is required"))
 			return
@@ -35,7 +31,6 @@ func UpdateMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 		switch req.MType {
 		case models.Counter:
 			if req.Delta == nil {
-				logger.Log.Error("Delta is omitted", zap.String("type", req.MType))
 				rw.WriteHeader(http.StatusBadRequest)
 				rw.Write([]byte("Delta for type \"counter\" is required"))
 				return
@@ -49,7 +44,6 @@ func UpdateMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 
 		case models.Gauge:
 			if req.Value == nil {
-				logger.Log.Error("Value is omitted", zap.String("type", req.MType))
 				rw.WriteHeader(http.StatusBadRequest)
 				rw.Write([]byte("Value for type \"gauge\" is required"))
 				return

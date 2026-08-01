@@ -16,7 +16,6 @@ func GetMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(&req); err != nil {
-			logger.Log.Error("error decoding json: %v", zap.Error(err))
 			rw.WriteHeader(http.StatusBadRequest)
 			rw.Write([]byte("Invalid json"))
 			return
