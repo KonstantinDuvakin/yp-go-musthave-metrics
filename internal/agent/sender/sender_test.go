@@ -125,7 +125,7 @@ func TestSendMetricsJson(t *testing.T) {
 
 			s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
 
-			if err := s.SendMetricsJson(context.Background(), tt.body); err != nil {
+			if err := s.SendMetricsJson(context.Background(), tt.body, ""); err != nil {
 				t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
 			}
 		})
@@ -147,7 +147,7 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 
 	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
 
-	if err := s.SendMetricsJson(context.Background(), body); err != nil {
+	if err := s.SendMetricsJson(context.Background(), body, ""); err != nil {
 		t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
 	}
 

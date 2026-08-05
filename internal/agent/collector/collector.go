@@ -1,8 +1,12 @@
 package collector
 
 import (
+	"fmt"
 	"math/rand"
 	"runtime"
+
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
 func Collector() map[string]float64 {
@@ -39,4 +43,21 @@ func Collector() map[string]float64 {
 		"TotalAlloc":    float64(m.TotalAlloc),
 		"RandomValue":   rand.Float64(),
 	}
+}
+
+func GopsCollector() map[string]float64 {
+	v, _ := mem.VirtualMemory()
+	cpus, _ := cpu.Percent(0, true)
+
+	res := map[string]float64{
+		"TotalMemory": float64(v.Total),
+		"FreeMemory":  float64(v.Free),
+	}
+
+	for i, c := range cpus {
+		name := fmt.Sprintf("CPUutilization%d", i+1)
+		res[name] = c
+	}
+
+	return res
 }

@@ -33,24 +33,52 @@ func (s *Sender) SendMetrics(ctx context.Context, url string) error {
 	return err
 }
 
-func (s *Sender) SendMetricsJson(ctx context.Context, body models.Metrics) error {
+func (s *Sender) SendMetricsJson(ctx context.Context, body models.Metrics, hashKey string) error {
 	bufGZip := bytes.NewBuffer(nil)
 	zw := gzip.NewWriter(bufGZip)
-	if err := json.NewEncoder(zw).Encode(body); err != nil {
+
+	data, err := json.Marshal(body)
+	if err != nil {
 		return err
 	}
 
-	if err := zw.Close(); err != nil {
+	var sign string
+	if hashKey != "" {
+		sign = hash.CreateHeaderHash(data, hashKey)
+	}
+
+	_, err = zw.Write(data)
+	if err != nil {
 		return err
 	}
 
-	_, err := s.client.R().
-		SetContext(ctx).
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(bufGZip.Bytes()).
-		Post("/update")
-	return err
+	if err = zw.Close(); err != nil {
+		return err
+	}
+
+	return retry.Do(ctx, retry.IsHttpRetriable, func() error {
+		req := s.client.R().
+			SetContext(ctx).
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Content-Encoding", "gzip").
+			SetBody(bufGZip.Bytes())
+
+		if hashKey != "" {
+			req.SetHeader("HashSHA256", sign)
+		}
+
+		resp, err := req.Post("/update")
+
+		if err != nil {
+			return err
+		}
+
+		if resp.IsError() {
+			return fmt.Errorf("batch upload failed: status %d", resp.StatusCode())
+		}
+
+		return nil
+	})
 }
 
 func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics, hashKey string) error {

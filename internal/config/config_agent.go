@@ -11,6 +11,7 @@ type AgentConfig struct {
 	PollSec   int
 	ReportSec int
 	Key       string
+	RateLimit int
 }
 
 func NewConfigAgent() *AgentConfig {
@@ -20,6 +21,7 @@ func NewConfigAgent() *AgentConfig {
 	flag.IntVar(&ac.PollSec, "p", 2, "defined poll interval duration")
 	flag.IntVar(&ac.ReportSec, "r", 10, "defined report interval duration")
 	flag.StringVar(&ac.Key, "k", "", "key for hash")
+	flag.IntVar(&ac.RateLimit, "l", 5, "rate limit for outcoming requests")
 
 	return ac
 }
@@ -43,5 +45,14 @@ func (ac *AgentConfig) ApplyEnv() {
 
 	if envKey := os.Getenv("KEY"); envKey != "" {
 		ac.Key = envKey
+	}
+
+	if envRateLimit := os.Getenv("RATE_LIMIT"); envRateLimit != "" {
+		if v, err := strconv.Atoi(envRateLimit); err == nil {
+			if v <= 0 {
+				v = 1
+			}
+			ac.RateLimit = v
+		}
 	}
 }
