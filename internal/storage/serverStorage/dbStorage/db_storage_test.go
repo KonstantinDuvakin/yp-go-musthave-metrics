@@ -1,7 +1,6 @@
 package dbStorage
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -21,16 +20,16 @@ func newTestStorage(t *testing.T) *DBStorage {
 		t.Skip("DATABASE_DSN не задан — пропускаю интеграционный тест")
 	}
 
-	pool, err := pgxpool.New(context.Background(), dsn)
+	pool, err := pgxpool.New(t.Context(), dsn)
 	require.NoError(t, err)
 
-	require.NoError(t, pool.Ping(context.Background()), "БД недоступна по DATABASE_DSN")
+	require.NoError(t, pool.Ping(t.Context()), "БД недоступна по DATABASE_DSN")
 
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	require.NoError(t, migrations.RunMigrations(sqlDB))
 	sqlDB.Close()
 
-	_, err = pool.Exec(context.Background(), "TRUNCATE metrics")
+	_, err = pool.Exec(t.Context(), "TRUNCATE metrics")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { pool.Close() })
@@ -122,7 +121,7 @@ func TestDBStorage_SaveMetricsBatch(t *testing.T) {
 		{ID: "Alloc", MType: models.Gauge, Value: &gv},
 		{ID: "PollCount", MType: models.Counter, Delta: &cd},
 	}
-	require.NoError(t, s.SaveMetricsBatch(context.Background(), batch))
+	require.NoError(t, s.SaveMetricsBatch(t.Context(), batch))
 
 	g, ok, err := s.GetGauge("Alloc")
 	require.NoError(t, err)
@@ -139,7 +138,7 @@ func TestDBStorage_SaveMetricsBatch_CounterAccumulates(t *testing.T) {
 	s := newTestStorage(t)
 
 	var d1, d2 int64 = 10, 5
-	require.NoError(t, s.SaveMetricsBatch(context.Background(), []models.Metrics{
+	require.NoError(t, s.SaveMetricsBatch(t.Context(), []models.Metrics{
 		{ID: "PollCount", MType: models.Counter, Delta: &d1},
 		{ID: "PollCount", MType: models.Counter, Delta: &d2},
 	}))
@@ -158,7 +157,7 @@ func TestDBStorage_SaveMetricsBatch_Atomic(t *testing.T) {
 		{ID: "Alloc", MType: models.Gauge, Value: &gv},
 		{ID: "PollCount", MType: models.Counter, Delta: nil},
 	}
-	require.Error(t, s.SaveMetricsBatch(context.Background(), batch))
+	require.Error(t, s.SaveMetricsBatch(t.Context(), batch))
 
 	_, ok, err := s.GetGauge("Alloc")
 	require.NoError(t, err)
@@ -167,5 +166,5 @@ func TestDBStorage_SaveMetricsBatch_Atomic(t *testing.T) {
 
 func TestDBStorage_SaveMetricsBatch_Empty(t *testing.T) {
 	s := newTestStorage(t)
-	require.NoError(t, s.SaveMetricsBatch(context.Background(), nil))
+	require.NoError(t, s.SaveMetricsBatch(t.Context(), nil))
 }
