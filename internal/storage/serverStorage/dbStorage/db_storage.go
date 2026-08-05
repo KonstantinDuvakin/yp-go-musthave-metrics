@@ -35,9 +35,8 @@ func execSetGauge(ctx context.Context, e execer, field string, value float64) er
 }
 
 func (dbs *DBStorage) SetGauge(field string, value float64) error {
-	ctx := context.TODO()
-	return retry.Do(ctx, retry.IsPGRetriable, func() error {
-		return execSetGauge(ctx, dbs.db, field, value)
+	return retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
+		return execSetGauge(context.TODO(), dbs.db, field, value)
 	})
 }
 
@@ -50,9 +49,8 @@ func execAddCounter(ctx context.Context, e execer, field string, value int64) er
 }
 
 func (dbs *DBStorage) AddCounter(field string, value int64) error {
-	ctx := context.TODO()
-	return retry.Do(ctx, retry.IsPGRetriable, func() error {
-		return execAddCounter(ctx, dbs.db, field, value)
+	return retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
+		return execAddCounter(context.TODO(), dbs.db, field, value)
 	})
 }
 
