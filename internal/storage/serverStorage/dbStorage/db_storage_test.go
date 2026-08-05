@@ -1,12 +1,11 @@
 package dbStorage
 
 import (
-	"context"
-	"database/sql"
 	"os"
 	"testing"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
@@ -21,18 +20,21 @@ func newTestStorage(t *testing.T) *DBStorage {
 		t.Skip("DATABASE_DSN не задан — пропускаю интеграционный тест")
 	}
 
-	db, err := sql.Open("pgx", dsn)
+	pool, err := pgxpool.New(t.Context(), dsn)
 	require.NoError(t, err)
 
-	require.NoError(t, db.PingContext(context.Background()), "БД недоступна по DATABASE_DSN")
-	require.NoError(t, migrations.RunMigrations(db))
+	require.NoError(t, pool.Ping(t.Context()), "БД недоступна по DATABASE_DSN")
 
-	_, err = db.Exec("TRUNCATE metrics")
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	require.NoError(t, migrations.RunMigrations(sqlDB))
+	sqlDB.Close()
+
+	_, err = pool.Exec(t.Context(), "TRUNCATE metrics")
 	require.NoError(t, err)
 
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { pool.Close() })
 
-	return NewDBStorage(db)
+	return NewDBStorage(pool)
 }
 
 func TestDBStorage_SetGauge(t *testing.T) {
@@ -119,7 +121,7 @@ func TestDBStorage_SaveMetricsBatch(t *testing.T) {
 		{ID: "Alloc", MType: models.Gauge, Value: &gv},
 		{ID: "PollCount", MType: models.Counter, Delta: &cd},
 	}
-	require.NoError(t, s.SaveMetricsBatch(context.Background(), batch))
+	require.NoError(t, s.SaveMetricsBatch(t.Context(), batch))
 
 	g, ok, err := s.GetGauge("Alloc")
 	require.NoError(t, err)
@@ -136,7 +138,7 @@ func TestDBStorage_SaveMetricsBatch_CounterAccumulates(t *testing.T) {
 	s := newTestStorage(t)
 
 	var d1, d2 int64 = 10, 5
-	require.NoError(t, s.SaveMetricsBatch(context.Background(), []models.Metrics{
+	require.NoError(t, s.SaveMetricsBatch(t.Context(), []models.Metrics{
 		{ID: "PollCount", MType: models.Counter, Delta: &d1},
 		{ID: "PollCount", MType: models.Counter, Delta: &d2},
 	}))
@@ -147,16 +149,15 @@ func TestDBStorage_SaveMetricsBatch_CounterAccumulates(t *testing.T) {
 	require.Equal(t, int64(15), c, "счётчики в одном батче должны накопиться (10+5)")
 }
 
-// Ключевой тест: при ошибке на любой метрике весь батч откатывается (атомарность транзакции).
 func TestDBStorage_SaveMetricsBatch_Atomic(t *testing.T) {
 	s := newTestStorage(t)
 
 	gv := 1.0
 	batch := []models.Metrics{
-		{ID: "Alloc", MType: models.Gauge, Value: &gv},       // валидный, пишется первым
-		{ID: "PollCount", MType: models.Counter, Delta: nil}, // битый counter → ошибка
+		{ID: "Alloc", MType: models.Gauge, Value: &gv},
+		{ID: "PollCount", MType: models.Counter, Delta: nil},
 	}
-	require.Error(t, s.SaveMetricsBatch(context.Background(), batch))
+	require.Error(t, s.SaveMetricsBatch(t.Context(), batch))
 
 	_, ok, err := s.GetGauge("Alloc")
 	require.NoError(t, err)
@@ -165,5 +166,5 @@ func TestDBStorage_SaveMetricsBatch_Atomic(t *testing.T) {
 
 func TestDBStorage_SaveMetricsBatch_Empty(t *testing.T) {
 	s := newTestStorage(t)
-	require.NoError(t, s.SaveMetricsBatch(context.Background(), nil))
+	require.NoError(t, s.SaveMetricsBatch(t.Context(), nil))
 }

@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
@@ -26,7 +28,8 @@ func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
 		case models.Gauge:
 			val, ok, err := storage.GetGauge(metricName)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				logger.Log.Error("Error getting gauge metric:", zap.Error(err))
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
@@ -39,7 +42,8 @@ func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
 		case models.Counter:
 			val, ok, err := storage.GetCounter(metricName)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				logger.Log.Error("Error getting counter metric:", zap.Error(err))
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 

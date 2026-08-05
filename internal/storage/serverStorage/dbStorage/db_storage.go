@@ -2,31 +2,32 @@ package dbStorage
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
-	"go.uber.org/zap"
 )
 
 type DBStorage struct {
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
 type execer interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func NewDBStorage(db *sql.DB) *DBStorage {
+func NewDBStorage(db *pgxpool.Pool) *DBStorage {
 	return &DBStorage{db}
 }
 
 func execSetGauge(ctx context.Context, e execer, field string, value float64) error {
-	_, err := e.ExecContext(ctx,
+	_, err := e.Exec(ctx,
 		`INSERT INTO metrics (id, mtype, value) VALUES ($1, $2, $3)
          ON CONFLICT (id, mtype) DO UPDATE SET value = EXCLUDED.value`,
 		field, models.Gauge, value)
@@ -34,14 +35,13 @@ func execSetGauge(ctx context.Context, e execer, field string, value float64) er
 }
 
 func (dbs *DBStorage) SetGauge(field string, value float64) error {
-	ctx := context.Background()
-	return retry.Do(ctx, retry.IsPGRetriable, func() error {
-		return execSetGauge(ctx, dbs.db, field, value)
+	return retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
+		return execSetGauge(context.TODO(), dbs.db, field, value)
 	})
 }
 
 func execAddCounter(ctx context.Context, e execer, field string, value int64) error {
-	_, err := e.ExecContext(ctx,
+	_, err := e.Exec(ctx,
 		`INSERT INTO metrics (id, mtype, delta) VALUES ($1, $2, $3)
          ON CONFLICT (id, mtype) DO UPDATE SET delta = metrics.delta + EXCLUDED.delta`,
 		field, models.Counter, value)
@@ -49,20 +49,19 @@ func execAddCounter(ctx context.Context, e execer, field string, value int64) er
 }
 
 func (dbs *DBStorage) AddCounter(field string, value int64) error {
-	ctx := context.Background()
-	return retry.Do(ctx, retry.IsPGRetriable, func() error {
-		return execAddCounter(ctx, dbs.db, field, value)
+	return retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
+		return execAddCounter(context.TODO(), dbs.db, field, value)
 	})
 }
 
 func (dbs *DBStorage) getGaugeOnce(field string) (float64, bool, error) {
 	var value float64
 
-	row := dbs.db.QueryRowContext(context.Background(), "SELECT value FROM metrics WHERE id = $1 AND mtype = $2", field, models.Gauge)
+	row := dbs.db.QueryRow(context.TODO(), "SELECT value FROM metrics WHERE id = $1 AND mtype = $2", field, models.Gauge)
 
 	err := row.Scan(&value)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return 0.0, false, nil
 	}
 
@@ -76,7 +75,7 @@ func (dbs *DBStorage) getGaugeOnce(field string) (float64, bool, error) {
 func (dbs *DBStorage) GetGauge(field string) (float64, bool, error) {
 	var value float64
 	var found bool
-	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+	err := retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
 		v, ok, e := dbs.getGaugeOnce(field)
 		value, found = v, ok
 		return e
@@ -87,11 +86,11 @@ func (dbs *DBStorage) GetGauge(field string) (float64, bool, error) {
 func (dbs *DBStorage) getCounterOnce(field string) (int64, bool, error) {
 	var value int64
 
-	row := dbs.db.QueryRowContext(context.Background(), "SELECT delta FROM metrics WHERE id = $1 AND mtype = $2", field, models.Counter)
+	row := dbs.db.QueryRow(context.TODO(), "SELECT delta FROM metrics WHERE id = $1 AND mtype = $2", field, models.Counter)
 
 	err := row.Scan(&value)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
 	}
 
@@ -105,7 +104,7 @@ func (dbs *DBStorage) getCounterOnce(field string) (int64, bool, error) {
 func (dbs *DBStorage) GetCounter(field string) (int64, bool, error) {
 	var value int64
 	var found bool
-	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+	err := retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
 		v, ok, e := dbs.getCounterOnce(field)
 		value, found = v, ok
 		return e
@@ -116,7 +115,7 @@ func (dbs *DBStorage) GetCounter(field string) (int64, bool, error) {
 func (dbs *DBStorage) getAllGaugesOnce() (storage.GaugeMap, error) {
 	gaugeMap := make(storage.GaugeMap)
 
-	rows, err := dbs.db.QueryContext(context.Background(), "SELECT id, value FROM metrics WHERE mtype = $1", models.Gauge)
+	rows, err := dbs.db.Query(context.TODO(), "SELECT id, value FROM metrics WHERE mtype = $1", models.Gauge)
 
 	if err != nil {
 		return nil, err
@@ -146,7 +145,7 @@ func (dbs *DBStorage) getAllGaugesOnce() (storage.GaugeMap, error) {
 
 func (dbs *DBStorage) GetAllGauges() (storage.GaugeMap, error) {
 	var gaugeMap storage.GaugeMap
-	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+	err := retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
 		gm, e := dbs.getAllGaugesOnce()
 		gaugeMap = gm
 		return e
@@ -157,7 +156,7 @@ func (dbs *DBStorage) GetAllGauges() (storage.GaugeMap, error) {
 func (dbs *DBStorage) getAllCountersOnce() (storage.CounterMap, error) {
 	counterMap := make(storage.CounterMap)
 
-	rows, err := dbs.db.QueryContext(context.Background(), "SELECT id, delta FROM metrics WHERE mtype = $1", models.Counter)
+	rows, err := dbs.db.Query(context.TODO(), "SELECT id, delta FROM metrics WHERE mtype = $1", models.Counter)
 
 	if err != nil {
 		return nil, err
@@ -187,7 +186,7 @@ func (dbs *DBStorage) getAllCountersOnce() (storage.CounterMap, error) {
 
 func (dbs *DBStorage) GetAllCounters() (storage.CounterMap, error) {
 	var counterMap storage.CounterMap
-	err := retry.Do(context.Background(), retry.IsPGRetriable, func() error {
+	err := retry.Do(context.TODO(), retry.IsPGRetriable, func() error {
 		cm, e := dbs.getAllCountersOnce()
 		counterMap = cm
 		return e
@@ -196,11 +195,11 @@ func (dbs *DBStorage) GetAllCounters() (storage.CounterMap, error) {
 }
 
 func (dbs *DBStorage) saveBatchOnce(ctx context.Context, metrics []models.Metrics) error {
-	tx, err := dbs.db.BeginTx(ctx, nil)
+	tx, err := dbs.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 
 	for _, metric := range metrics {
 		if metric.ID == "" {
@@ -210,13 +209,11 @@ func (dbs *DBStorage) saveBatchOnce(ctx context.Context, metrics []models.Metric
 		switch metric.MType {
 		case models.Gauge:
 			if metric.Value == nil {
-				logger.Log.Error("Value is omitted", zap.String("type", metric.MType))
 				return fmt.Errorf("value for type \"gauge\" is required")
 			}
 			err = execSetGauge(ctx, tx, metric.ID, *metric.Value)
 		case models.Counter:
 			if metric.Delta == nil {
-				logger.Log.Error("Delta is omitted", zap.String("type", metric.MType))
 				return fmt.Errorf("delta for type \"counter\" is required")
 			}
 			err = execAddCounter(ctx, tx, metric.ID, *metric.Delta)
@@ -225,12 +222,11 @@ func (dbs *DBStorage) saveBatchOnce(ctx context.Context, metrics []models.Metric
 		}
 
 		if err != nil {
-			logger.Log.Error("Error setting metric", zap.Error(err))
-			return fmt.Errorf("error setting metric: %s", metric.ID)
+			return fmt.Errorf("error setting metric: %s : %w", metric.ID, err)
 		}
 	}
 
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 func (dbs *DBStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {

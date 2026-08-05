@@ -36,6 +36,13 @@ func Do(ctx context.Context, isRetriable func(error) bool, handler func() error)
 
 func IsPGRetriable(err error) bool {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+		switch pgErr.Code {
+		case pgerrcode.SerializationFailure,
+			pgerrcode.DeadlockDetected,
+			pgerrcode.AdminShutdown,
+			pgerrcode.TooManyConnections:
+			return true
+		}
 		return pgerrcode.IsConnectionException(pgErr.Code)
 	}
 	var netErr net.Error
