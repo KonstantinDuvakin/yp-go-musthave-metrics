@@ -2,8 +2,10 @@ package memStorage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"sync"
@@ -26,42 +28,44 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (ms *MemStorage) SetGauge(field string, value float64) {
+func (ms *MemStorage) SetGauge(field string, value float64) error {
 	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	ms.Gauge[field] = value
-	ms.mu.Unlock()
+	return nil
 }
 
-func (ms *MemStorage) AddCounter(field string, value int64) {
+func (ms *MemStorage) AddCounter(field string, value int64) error {
 	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	ms.Counter[field] += value
-	ms.mu.Unlock()
+	return nil
 }
 
-func (ms *MemStorage) GetGauge(field string) (float64, bool) {
+func (ms *MemStorage) GetGauge(field string) (float64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	res, ok := ms.Gauge[field]
-	return res, ok
+	return res, ok, nil
 }
 
-func (ms *MemStorage) GetCounter(field string) (int64, bool) {
+func (ms *MemStorage) GetCounter(field string) (int64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	res, ok := ms.Counter[field]
-	return res, ok
+	return res, ok, nil
 }
 
-func (ms *MemStorage) GetAllGauges() storage.GaugeMap {
+func (ms *MemStorage) GetAllGauges() (storage.GaugeMap, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	return maps.Clone(ms.Gauge)
+	return maps.Clone(ms.Gauge), nil
 }
 
-func (ms *MemStorage) GetAllCounters() storage.CounterMap {
+func (ms *MemStorage) GetAllCounters() (storage.CounterMap, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	return maps.Clone(ms.Counter)
+	return maps.Clone(ms.Counter), nil
 }
 
 func (ms *MemStorage) SaveMetricsToFile(filename string) error {
@@ -115,13 +119,33 @@ func (ms *MemStorage) RestoreFromFile(filename string) error {
 
 		switch metric.MType {
 		case models.Counter:
-			ms.AddCounter(metric.ID, *metric.Delta)
+			_ = ms.AddCounter(metric.ID, *metric.Delta)
 		case models.Gauge:
-			ms.SetGauge(metric.ID, *metric.Value)
+			_ = ms.SetGauge(metric.ID, *metric.Value)
 		default:
 			return errors.New("invalid metric type")
 		}
 	}
 
 	return scanner.Err()
+}
+
+func (ms *MemStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	for _, m := range metrics {
+		switch m.MType {
+		case models.Gauge:
+			if m.Value == nil {
+				return fmt.Errorf("gauge %s: value is nil", m.ID)
+			}
+			_ = ms.SetGauge(m.ID, *m.Value)
+		case models.Counter:
+			if m.Delta == nil {
+				return fmt.Errorf("counter %s: delta is nil", m.ID)
+			}
+			_ = ms.AddCounter(m.ID, *m.Delta)
+		default:
+			return fmt.Errorf("unknown metric type: %s", m.MType)
+		}
+	}
+	return nil
 }

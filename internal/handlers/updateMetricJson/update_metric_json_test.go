@@ -1,4 +1,4 @@
-package handler
+package updateMetricJson
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
 )
 
 func TestUpdateMetricJson_StatusCodes(t *testing.T) {
@@ -94,7 +94,7 @@ func TestUpdateMetricJson_StoresGauge(t *testing.T) {
 		t.Fatalf("status=%d, want=%d", rec.Code, http.StatusOK)
 	}
 
-	got, ok := ms.GetGauge("Alloc")
+	got, ok, _ := ms.GetGauge("Alloc")
 	if !ok {
 		t.Fatal("gauge Alloc not found in storage")
 	}
@@ -120,7 +120,7 @@ func TestUpdateMetricJson_CounterAccumulates(t *testing.T) {
 	send(10)
 	send(5)
 
-	got, ok := ms.GetCounter("PollCount")
+	got, ok, _ := ms.GetCounter("PollCount")
 	if !ok {
 		t.Fatal("counter PollCount not found in storage")
 	}

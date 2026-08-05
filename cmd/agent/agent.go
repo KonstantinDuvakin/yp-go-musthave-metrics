@@ -7,8 +7,10 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/collector"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agentStorage"
+	"go.uber.org/zap"
 )
 
 type Agent struct {
@@ -40,29 +42,36 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration) {
 			}
 			a.storage.AddCounter("PollCount")
 		case <-reportTicker.C:
-			gauge, counter := a.storage.Snapshot()
-			for name, value := range gauge {
-				body := models.Metrics{
+			gauges, counters := a.storage.Snapshot()
+			metricsBatch := make([]models.Metrics, 0, len(gauges)+len(counters))
+
+			for name, value := range gauges {
+				gaugeMetric := models.Metrics{
 					ID:    name,
 					MType: models.Gauge,
 					Value: &value,
 				}
 
-				err := a.sender.SendMetricsJson(ctx, body)
-				if err != nil {
-					fmt.Printf("Couldn't sent gauge metric %s\nError: %v\n", name, err)
-				}
+				metricsBatch = append(metricsBatch, gaugeMetric)
 			}
-			for name, value := range counter {
-				body := models.Metrics{
+
+			for name, value := range counters {
+				counterMetric := models.Metrics{
 					ID:    name,
 					MType: models.Counter,
 					Delta: &value,
 				}
-				err := a.sender.SendMetricsJson(ctx, body)
-				if err != nil {
-					fmt.Printf("Couldn't sent counter metric %s\nError: %v\n", name, err)
-				}
+
+				metricsBatch = append(metricsBatch, counterMetric)
+			}
+
+			if len(metricsBatch) == 0 {
+				continue
+			}
+
+			err := a.sender.SendMetricsBatch(ctx, metricsBatch)
+			if err != nil {
+				logger.Log.Error("Couldn't sent metrics\nError: %v\n", zap.Error(err))
 			}
 			fmt.Println("Send")
 		}

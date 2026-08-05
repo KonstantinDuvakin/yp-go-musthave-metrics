@@ -1,4 +1,4 @@
-package handler
+package getMetricHandler
 
 import (
 	"io"
@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func GetMetricHandler(storage storage.ServerStorage) http.HandlerFunc {
+func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "type")
 		metricName := chi.URLParam(r, "name")
@@ -24,18 +24,30 @@ func GetMetricHandler(storage storage.ServerStorage) http.HandlerFunc {
 
 		switch metricType {
 		case models.Gauge:
-			val, ok := storage.GetGauge(metricName)
+			val, ok, err := storage.GetGauge(metricName)
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
 			if !ok {
 				http.Error(w, "Not found metric with name "+metricName, http.StatusNotFound)
 				return
 			}
+
 			res = strconv.FormatFloat(val, 'g', -1, 64)
 		case models.Counter:
-			val, ok := storage.GetCounter(metricName)
+			val, ok, err := storage.GetCounter(metricName)
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
 			if !ok {
 				http.Error(w, "Not found counter with name "+metricName, http.StatusNotFound)
 				return
 			}
+
 			res = strconv.FormatInt(val, 10)
 		default:
 			http.Error(w, "Not found counter or metric with name "+metricName, http.StatusNotFound)

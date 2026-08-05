@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func SaveToFile(ctx context.Context, c *config.ServerConfig, store storage.ServerStorage, done chan<- struct{}) {
+func SaveToFile(ctx context.Context, c *config.ServerConfig, store storage.FilePersistentStorage, done chan<- struct{}) {
 	defer close(done)
 
 	if c.StoreInterval > 0 {

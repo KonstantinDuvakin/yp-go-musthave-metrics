@@ -1,4 +1,4 @@
-package handler
+package getMetricJson
 
 import (
 	"encoding/json"
@@ -10,13 +10,12 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetMetricJson(storage storage.ServerStorage) http.HandlerFunc {
+func GetMetricJson(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req models.Metrics
 
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(&req); err != nil {
-			logger.Log.Error("error decoding json: %v", zap.Error(err))
 			rw.WriteHeader(http.StatusBadRequest)
 			rw.Write([]byte("Invalid json"))
 			return
@@ -24,7 +23,14 @@ func GetMetricJson(storage storage.ServerStorage) http.HandlerFunc {
 
 		switch req.MType {
 		case models.Counter:
-			val, ok := storage.GetCounter(req.ID)
+			val, ok, err := storage.GetCounter(req.ID)
+			if err != nil {
+				logger.Log.Error("error getting metric value", zap.String("id", req.ID))
+				rw.WriteHeader(http.StatusInternalServerError)
+				rw.Write([]byte("Error getting metric value"))
+				return
+			}
+
 			if !ok {
 				logger.Log.Error("error getting metric value", zap.String("id", req.ID))
 				rw.WriteHeader(http.StatusNotFound)
@@ -34,7 +40,14 @@ func GetMetricJson(storage storage.ServerStorage) http.HandlerFunc {
 
 			req.Delta = &val
 		case models.Gauge:
-			val, ok := storage.GetGauge(req.ID)
+			val, ok, err := storage.GetGauge(req.ID)
+			if err != nil {
+				logger.Log.Error("error getting metric value", zap.String("id", req.ID))
+				rw.WriteHeader(http.StatusInternalServerError)
+				rw.Write([]byte("Error getting metric value"))
+				return
+			}
+
 			if !ok {
 				logger.Log.Error("error getting metric value", zap.String("id", req.ID))
 				rw.WriteHeader(http.StatusNotFound)

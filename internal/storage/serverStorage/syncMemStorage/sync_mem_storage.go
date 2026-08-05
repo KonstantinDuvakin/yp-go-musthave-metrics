@@ -1,7 +1,11 @@
-package memStorage
+package syncMemStorage
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"go.uber.org/zap"
 )
@@ -19,14 +23,22 @@ func NewSyncMemStorage(s storage.ServerStorage, path string) *SyncMemStorage {
 	return ms
 }
 
-func (s *SyncMemStorage) SetGauge(name string, value float64) {
-	s.store.SetGauge(name, value)
+func (s *SyncMemStorage) SetGauge(name string, value float64) error {
+	err := s.store.SetGauge(name, value)
+	if err != nil {
+		return fmt.Errorf("error setting metric: %s : %w", name, err)
+	}
 	s.markSaving()
+	return nil
 }
 
-func (s *SyncMemStorage) AddCounter(name string, value int64) {
-	s.store.AddCounter(name, value)
+func (s *SyncMemStorage) AddCounter(name string, value int64) error {
+	err := s.store.AddCounter(name, value)
+	if err != nil {
+		return fmt.Errorf("error setting metric: %s : %w", name, err)
+	}
 	s.markSaving()
+	return nil
 }
 
 func (s *SyncMemStorage) Close() {
@@ -54,19 +66,27 @@ func (s *SyncMemStorage) startSaving() {
 	close(s.isFinishingFlag)
 }
 
-func (s *SyncMemStorage) GetGauge(field string) (float64, bool) {
+func (s *SyncMemStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	if err := s.store.SaveMetricsBatch(ctx, metrics); err != nil {
+		return err
+	}
+	s.markSaving()
+	return nil
+}
+
+func (s *SyncMemStorage) GetGauge(field string) (float64, bool, error) {
 	return s.store.GetGauge(field)
 }
 
-func (s *SyncMemStorage) GetCounter(field string) (int64, bool) {
+func (s *SyncMemStorage) GetCounter(field string) (int64, bool, error) {
 	return s.store.GetCounter(field)
 }
 
-func (s *SyncMemStorage) GetAllGauges() storage.GaugeMap {
+func (s *SyncMemStorage) GetAllGauges() (storage.GaugeMap, error) {
 	return s.store.GetAllGauges()
 }
 
-func (s *SyncMemStorage) GetAllCounters() storage.CounterMap {
+func (s *SyncMemStorage) GetAllCounters() (storage.CounterMap, error) {
 	return s.store.GetAllCounters()
 }
 

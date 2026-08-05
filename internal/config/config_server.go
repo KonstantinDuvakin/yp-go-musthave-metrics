@@ -11,6 +11,7 @@ type ServerConfig struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
+	DB              string
 }
 
 func NewConfigServer() *ServerConfig {
@@ -20,6 +21,7 @@ func NewConfigServer() *ServerConfig {
 	flag.IntVar(&sc.StoreInterval, "i", 3, "Interval in seconds for savings in storage file.")
 	flag.StringVar(&sc.FileStoragePath, "f", "metrics_log.txt", "The file storage path.")
 	flag.BoolVar(&sc.Restore, "r", true, "Flag for restoring data from storage file.")
+	flag.StringVar(&sc.DB, "d", "", "Flag for database address.")
 
 	return sc
 }
@@ -43,5 +45,9 @@ func (sc *ServerConfig) ApplyEnv() {
 		if restore, err := strconv.ParseBool(envRestore); err == nil {
 			sc.Restore = restore
 		}
+	}
+
+	if envDatabaseAddress := os.Getenv("DATABASE_DSN"); envDatabaseAddress != "" {
+		sc.DB = envDatabaseAddress
 	}
 }

@@ -1,4 +1,4 @@
-package handler
+package getMetricHandler
 
 import (
 	"io"
@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
 	"github.com/go-chi/chi/v5"
 )
 
