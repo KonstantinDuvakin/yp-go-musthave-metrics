@@ -4,6 +4,9 @@ import (
 	"flag"
 	"os"
 	"strconv"
+
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
+	"go.uber.org/zap"
 )
 
 type AgentConfig struct {
@@ -48,11 +51,14 @@ func (ac *AgentConfig) ApplyEnv() {
 	}
 
 	if envRateLimit := os.Getenv("RATE_LIMIT"); envRateLimit != "" {
-		if v, err := strconv.Atoi(envRateLimit); err == nil {
-			if v <= 0 {
-				v = 1
-			}
-			ac.RateLimit = v
+		v, err := strconv.Atoi(envRateLimit)
+		if err != nil {
+			logger.Log.Error("invalid rate limit value: ", zap.Error(err))
 		}
+
+		if v <= 0 {
+			v = 1
+		}
+		ac.RateLimit = v
 	}
 }
