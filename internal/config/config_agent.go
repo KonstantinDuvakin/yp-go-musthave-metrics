@@ -39,9 +39,11 @@ func (ac *AgentConfig) ApplyEnv() {
 	}
 
 	if envReportSec := os.Getenv("REPORT_INTERVAL"); envReportSec != "" {
-		if v, err := strconv.Atoi(envReportSec); err == nil {
-			ac.ReportSec = v
+		v, err := strconv.Atoi(envReportSec)
+		if err != nil {
+			fmt.Printf("Invalid REPORT_INTERVAL value: %s\n", envReportSec)
 		}
+		ac.ReportSec = v
 	}
 
 	if envKey := os.Getenv("KEY"); envKey != "" {
