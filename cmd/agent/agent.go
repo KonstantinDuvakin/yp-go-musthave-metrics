@@ -37,7 +37,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 
 	var wg sync.WaitGroup
 
-	jobs := make(chan models.Metrics, limit)
+	jobs := make(chan []models.Metrics, limit)
 
 	for i := 0; i < limit; i++ {
 		wg.Add(1)
@@ -45,7 +45,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				err := a.sender.SendMetricsJson(ctx, job, hashKey)
+				err := a.sender.SendMetricsBatch(ctx, job, hashKey)
 				if err != nil {
 					logger.Log.Error("Couldn't sent metric\nError: \n", zap.Error(err))
 				}
@@ -97,6 +97,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 				return
 			case <-reportTicker.C:
 				gauges, counters := a.storage.Snapshot()
+				metricsBatch := make([]models.Metrics, 0, len(gauges)+len(counters))
 
 				for name, value := range gauges {
 					gaugeMetric := models.Metrics{
@@ -105,7 +106,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 						Value: &value,
 					}
 
-					jobs <- gaugeMetric
+					metricsBatch = append(metricsBatch, gaugeMetric)
 				}
 
 				for name, value := range counters {
@@ -115,7 +116,17 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 						Delta: &value,
 					}
 
-					jobs <- counterMetric
+					metricsBatch = append(metricsBatch, counterMetric)
+				}
+
+				if len(metricsBatch) == 0 {
+					continue
+				}
+
+				select {
+				case jobs <- metricsBatch:
+				case <-ctx.Done():
+					return
 				}
 			}
 		}
