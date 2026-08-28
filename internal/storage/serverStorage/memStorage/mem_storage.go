@@ -77,21 +77,21 @@ func (ms *MemStorage) SaveMetricsToFile(filename string) error {
 
 	writer := bufio.NewWriter(file)
 
-	dec := json.NewEncoder(writer)
+	enc := json.NewEncoder(writer)
 
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
 	for id, delta := range ms.Counter {
 		metric := models.Metrics{ID: id, MType: models.Counter, Delta: &delta}
-		if err = dec.Encode(metric); err != nil {
+		if err = enc.Encode(metric); err != nil {
 			return err
 		}
 	}
 
 	for id, value := range ms.Gauge {
 		metric := models.Metrics{ID: id, MType: models.Gauge, Value: &value}
-		if err = dec.Encode(metric); err != nil {
+		if err = enc.Encode(metric); err != nil {
 			return err
 		}
 	}

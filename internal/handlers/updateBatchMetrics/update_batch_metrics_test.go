@@ -17,7 +17,7 @@ func doRequest(t *testing.T, store *memStorage.MemStorage, body []byte) *httptes
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/updates/", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
-	UpdateBatchMetrics(store)(rec, req)
+	UpdateBatchMetrics(store, func(models.Audit) {})(rec, req)
 	return rec
 }
 

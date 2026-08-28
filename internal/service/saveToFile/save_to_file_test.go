@@ -1,4 +1,4 @@
-package service
+package saveToFile
 
 import (
 	"context"

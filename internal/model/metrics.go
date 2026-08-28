@@ -17,3 +17,9 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"`
 	Hash  string   `json:"hash,omitempty"`
 }
+
+type Audit struct {
+	Ts        int64    `json:"ts"`
+	Metrics   []string `json:"metrics"`
+	IpAddress string   `json:"ip_address"`
+}

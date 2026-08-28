@@ -3,12 +3,12 @@ package serverStorage
 import (
 	"context"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/saveToFile"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/dbStorage"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
@@ -53,7 +53,7 @@ func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.Metri
 		shutdown = syncStore.Close
 	} else {
 		done := make(chan struct{})
-		go service.SaveToFile(ctx, config, base, done)
+		go saveToFile.SaveToFile(ctx, config, base, done)
 		shutdown = func() { <-done }
 	}
 

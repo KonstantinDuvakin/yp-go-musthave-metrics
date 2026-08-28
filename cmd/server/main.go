@@ -21,6 +21,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/sendToAudit"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -49,6 +50,13 @@ func main() {
 		pinger = db
 	}
 
+	auditDoneCh := make(chan struct{})
+	auditService := sendToAudit.NewAuditService(c.AuditFile, c.AuditUrl)
+	go func() {
+		auditService.Start()
+		close(auditDoneCh)
+	}()
+
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
@@ -61,7 +69,7 @@ func main() {
 			r.Post(`/{type}/{name}/{value}`, updateHandler.UpdateHandler(store))
 		})
 		r.Route("/updates", func(r chi.Router) {
-			r.Post("/", updateBatchMetrics.UpdateBatchMetrics(store))
+			r.Post("/", updateBatchMetrics.UpdateBatchMetrics(store, auditService.SendEvent))
 		})
 		r.Route("/value", func(r chi.Router) {
 			r.Post("/", getMetricJson.GetMetricJson(store))
@@ -89,5 +97,7 @@ func main() {
 
 	_ = server.Shutdown(shutdownCtx)
 
+	auditService.Stop()
 	shutdown()
+	<-auditDoneCh
 }

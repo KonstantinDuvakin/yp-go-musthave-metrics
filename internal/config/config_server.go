@@ -13,6 +13,8 @@ type ServerConfig struct {
 	Restore         bool
 	DB              string
 	Key             string
+	AuditFile       string
+	AuditUrl        string
 }
 
 func NewConfigServer() *ServerConfig {
@@ -24,6 +26,8 @@ func NewConfigServer() *ServerConfig {
 	flag.BoolVar(&sc.Restore, "r", true, "Flag for restoring data from storage file.")
 	flag.StringVar(&sc.DB, "d", "", "Flag for database address.")
 	flag.StringVar(&sc.Key, "k", "", "key for hash.")
+	flag.StringVar(&sc.AuditFile, "audit-file", "", "path to audit file.")
+	flag.StringVar(&sc.AuditUrl, "audit-url", "", "url for audit.")
 
 	return sc
 }
@@ -55,5 +59,13 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envKey := os.Getenv("KEY"); envKey != "" {
 		sc.Key = envKey
+	}
+
+	if envAuditFile := os.Getenv("AUDIT_FILE"); envAuditFile != "" {
+		sc.AuditFile = envAuditFile
+	}
+
+	if envAuditUrl := os.Getenv("AUDIT_URL"); envAuditUrl != "" {
+		sc.AuditUrl = envAuditUrl
 	}
 }

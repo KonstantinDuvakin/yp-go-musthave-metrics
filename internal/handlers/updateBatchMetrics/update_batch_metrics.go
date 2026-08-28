@@ -3,6 +3,7 @@ package updateBatchMetrics
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
@@ -10,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func UpdateBatchMetrics(store storage.MetricsStorage) http.HandlerFunc {
+func UpdateBatchMetrics(store storage.MetricsStorage, auditFunc func(event models.Audit)) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req []models.Metrics
 
@@ -28,6 +29,18 @@ func UpdateBatchMetrics(store storage.MetricsStorage) http.HandlerFunc {
 			rw.Write([]byte("Couldn't save metrics batch"))
 			return
 		}
+
+		event := models.Audit{
+			Ts:        time.Now().UnixMilli(),
+			Metrics:   make([]string, 0, len(req)),
+			IpAddress: r.RemoteAddr,
+		}
+
+		for _, el := range req {
+			event.Metrics = append(event.Metrics, el.ID)
+		}
+
+		auditFunc(event)
 
 		rw.WriteHeader(http.StatusOK)
 	}
