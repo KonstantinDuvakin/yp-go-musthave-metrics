@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	getmetricjson "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/get_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage/mem_storage"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +21,7 @@ func TestMiddleware(t *testing.T) {
 		Counter: map[string]int64{},
 	}
 
-	h := Middleware(get_metric_json.GetMetricJSON(ms))
+	h := Middleware(getmetricjson.GetMetricJSON(ms))
 
 	srv := httptest.NewServer(h)
 	defer srv.Close()

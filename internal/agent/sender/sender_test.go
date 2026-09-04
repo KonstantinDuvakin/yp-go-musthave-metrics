@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	updatehandler "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
+	updatemetricjson "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
@@ -51,7 +53,7 @@ func TestSendMetrics(t *testing.T) {
 			ms := memstorage.NewMemStorage()
 
 			r := chi.NewRouter()
-			r.Post("/update/{type}/{name}/{value}", update_handler.UpdateHandler(ms))
+			r.Post("/update/{type}/{name}/{value}", updatehandler.UpdateHandler(ms))
 
 			request := httptest.NewRequest(http.MethodPost, tt.args.url, nil)
 			w := httptest.NewRecorder()
@@ -138,7 +140,7 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(gzipmw.Middleware)
-	r.Post("/update", update_metric_json.UpdateMetricJSON(store))
+	r.Post("/update", updatemetricjson.UpdateMetricJSON(store))
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
