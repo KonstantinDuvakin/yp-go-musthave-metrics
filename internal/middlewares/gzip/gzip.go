@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type compressWriter struct {
@@ -12,10 +13,18 @@ type compressWriter struct {
 	zw *gzip.Writer
 }
 
+var writerPool = sync.Pool{
+	New: func() any {
+		return gzip.NewWriter(io.Discard)
+	},
+}
+
 func newCompressWriter(w http.ResponseWriter) *compressWriter {
+	zw := writerPool.Get().(*gzip.Writer)
+	zw.Reset(w)
 	return &compressWriter{
 		w:  w,
-		zw: gzip.NewWriter(w),
+		zw: zw,
 	}
 }
 
@@ -35,7 +44,9 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 }
 
 func (c *compressWriter) Close() error {
-	return c.zw.Close()
+	err := c.zw.Close()
+	writerPool.Put(c.zw)
+	return err
 }
 
 type compressReader struct {

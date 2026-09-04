@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +25,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/sendToAudit"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 )
 
@@ -77,6 +79,8 @@ func main() {
 		})
 		r.Get("/ping", pingDBHandler.PingDBHandler(pinger))
 	})
+
+	r.Mount("/debug", middleware.Profiler())
 
 	server := &http.Server{
 		Addr:    c.Address,
