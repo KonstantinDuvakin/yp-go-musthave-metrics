@@ -49,7 +49,7 @@ func IsPGRetriable(err error) bool {
 	return errors.As(err, &netErr)
 }
 
-func IsHttpRetriable(err error) bool {
+func IsHTTPRetriable(err error) bool {
 	if err == nil {
 		return false
 	}

@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage/memStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage/mem_storage"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -50,10 +50,10 @@ func TestSendMetrics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := memStorage.NewMemStorage()
+			ms := mem_storage.NewMemStorage()
 
 			r := chi.NewRouter()
-			r.Post("/update/{type}/{name}/{value}", updateHandler.UpdateHandler(ms))
+			r.Post("/update/{type}/{name}/{value}", update_handler.UpdateHandler(ms))
 
 			request := httptest.NewRequest(http.MethodPost, tt.args.url, nil)
 			w := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestSendMetricsJson(t *testing.T) {
 
 			s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
 
-			if err := s.SendMetricsJson(context.Background(), tt.body, ""); err != nil {
+			if err := s.SendMetricsJSON(context.Background(), tt.body, ""); err != nil {
 				t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
 			}
 		})
@@ -136,18 +136,18 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 	delta := int64(5)
 	body := models.Metrics{ID: "PollCount", MType: models.Counter, Delta: &delta}
 
-	store := memStorage.NewMemStorage()
+	store := mem_storage.NewMemStorage()
 
 	r := chi.NewRouter()
 	r.Use(gzipmw.Middleware)
-	r.Post("/update", updateMetricJson.UpdateMetricJson(store))
+	r.Post("/update", update_metric_json.UpdateMetricJSON(store))
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
 	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
 
-	if err := s.SendMetricsJson(context.Background(), body, ""); err != nil {
+	if err := s.SendMetricsJSON(context.Background(), body, ""); err != nil {
 		t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
 	}
 

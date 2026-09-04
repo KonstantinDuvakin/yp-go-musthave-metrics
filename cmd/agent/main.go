@@ -10,7 +10,7 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agentStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agent_storage"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	flag.Parse()
 	c.ApplyEnv()
 
-	store := agentStorage.NewAgentStorage()
+	store := agent_storage.NewAgentStorage()
 	send := sender.NewSender(c.Address)
 	agent := New(store, send)
 

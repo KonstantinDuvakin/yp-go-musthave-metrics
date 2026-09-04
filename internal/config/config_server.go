@@ -14,7 +14,7 @@ type ServerConfig struct {
 	DB              string
 	Key             string
 	AuditFile       string
-	AuditUrl        string
+	AuditURL        string
 }
 
 func NewConfigServer() *ServerConfig {
@@ -27,7 +27,7 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.DB, "d", "", "Flag for database address.")
 	flag.StringVar(&sc.Key, "k", "", "key for hash.")
 	flag.StringVar(&sc.AuditFile, "audit-file", "", "path to audit file.")
-	flag.StringVar(&sc.AuditUrl, "audit-url", "", "url for audit.")
+	flag.StringVar(&sc.AuditURL, "audit-url", "", "url for audit.")
 
 	return sc
 }
@@ -65,7 +65,7 @@ func (sc *ServerConfig) ApplyEnv() {
 		sc.AuditFile = envAuditFile
 	}
 
-	if envAuditUrl := os.Getenv("AUDIT_URL"); envAuditUrl != "" {
-		sc.AuditUrl = envAuditUrl
+	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
+		sc.AuditURL = envAuditURL
 	}
 }

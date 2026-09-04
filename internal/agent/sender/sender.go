@@ -33,7 +33,7 @@ func (s *Sender) SendMetrics(ctx context.Context, url string) error {
 	return err
 }
 
-func (s *Sender) SendMetricsJson(ctx context.Context, body models.Metrics, hashKey string) error {
+func (s *Sender) SendMetricsJSON(ctx context.Context, body models.Metrics, hashKey string) error {
 	bufGZip := bytes.NewBuffer(nil)
 	zw := gzip.NewWriter(bufGZip)
 
@@ -56,7 +56,7 @@ func (s *Sender) SendMetricsJson(ctx context.Context, body models.Metrics, hashK
 		return err
 	}
 
-	return retry.Do(ctx, retry.IsHttpRetriable, func() error {
+	return retry.Do(ctx, retry.IsHTTPRetriable, func() error {
 		req := s.client.R().
 			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
@@ -104,7 +104,7 @@ func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics,
 		return err
 	}
 
-	return retry.Do(ctx, retry.IsHttpRetriable, func() error {
+	return retry.Do(ctx, retry.IsHTTPRetriable, func() error {
 		req := s.client.R().
 			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").

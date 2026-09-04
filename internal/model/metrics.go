@@ -19,7 +19,7 @@ type Metrics struct {
 }
 
 type Audit struct {
-	Ts        int64    `json:"ts"`
+	TS        int64    `json:"ts"`
 	Metrics   []string `json:"metrics"`
-	IpAddress string   `json:"ip_address"`
+	IPAddress string   `json:"ip_address"`
 }

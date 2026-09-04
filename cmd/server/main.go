@@ -12,18 +12,18 @@ import (
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricJson"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/pingDBHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/rootHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateBatchMetrics"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/get_metric_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/get_metric_json"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/ping_db_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/root_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_batch_metrics"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/sendToAudit"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/send_to_audit"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
@@ -42,18 +42,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store, db, shutdown, err := serverStorage.NewStorage(ctx, c)
+	store, db, shutdown, err := server_storage.NewStorage(ctx, c)
 	if err != nil {
 		logger.Log.Fatal("Failed to initialize storage", zap.Error(err))
 	}
 
-	var pinger pingDBHandler.Pinger
+	var pinger ping_db_handler.Pinger
 	if db != nil {
 		pinger = db
 	}
 
 	auditDoneCh := make(chan struct{})
-	auditService := sendToAudit.NewAuditService(c.AuditFile, c.AuditUrl)
+	auditService := send_to_audit.NewAuditService(c.AuditFile, c.AuditURL)
 	go func() {
 		auditService.Start()
 		close(auditDoneCh)
@@ -65,19 +65,19 @@ func main() {
 		r.Use(gzip.Middleware)
 		r.Use(hash.HashMiddleware(c.Key))
 
-		r.Get("/", rootHandler.RootHandler(store))
+		r.Get("/", root_handler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", updateMetricJson.UpdateMetricJson(store))
-			r.Post(`/{type}/{name}/{value}`, updateHandler.UpdateHandler(store))
+			r.Post("/", update_metric_json.UpdateMetricJSON(store))
+			r.Post(`/{type}/{name}/{value}`, update_handler.UpdateHandler(store))
 		})
 		r.Route("/updates", func(r chi.Router) {
-			r.Post("/", updateBatchMetrics.UpdateBatchMetrics(store, auditService.SendEvent))
+			r.Post("/", update_batch_metrics.UpdateBatchMetrics(store, auditService.SendEvent))
 		})
 		r.Route("/value", func(r chi.Router) {
-			r.Post("/", getMetricJson.GetMetricJson(store))
-			r.Get(`/{type}/{name}`, getMetricHandler.GetMetricHandler(store))
+			r.Post("/", get_metric_json.GetMetricJSON(store))
+			r.Get(`/{type}/{name}`, get_metric_handler.GetMetricHandler(store))
 		})
-		r.Get("/ping", pingDBHandler.PingDBHandler(pinger))
+		r.Get("/ping", ping_db_handler.PingDBHandler(pinger))
 	})
 
 	r.Mount("/debug", middleware.Profiler())

@@ -9,16 +9,16 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agentStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agent_storage"
 	"go.uber.org/zap"
 )
 
 type Agent struct {
-	storage *agentStorage.AgentStorage
+	storage *agent_storage.AgentStorage
 	sender  *sender.Sender
 }
 
-func New(storage *agentStorage.AgentStorage, sender *sender.Sender) *Agent {
+func New(storage *agent_storage.AgentStorage, sender *sender.Sender) *Agent {
 	return &Agent{
 		storage: storage,
 		sender:  sender,
