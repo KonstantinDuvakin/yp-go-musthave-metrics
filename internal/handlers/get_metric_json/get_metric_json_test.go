@@ -1,4 +1,4 @@
-package get_metric_json
+package getmetricjson
 
 import (
 	"encoding/json"
@@ -53,7 +53,7 @@ func TestGetMetricJson_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := mem_storage.NewMemStorage()
+			ms := memstorage.NewMemStorage()
 			ms.AddCounter("PollCount", 10)
 			ms.SetGauge("Alloc", 123.45)
 
@@ -75,7 +75,7 @@ func TestGetMetricJson_StatusCodes(t *testing.T) {
 }
 
 func TestGetMetricJson_CounterResponseBody(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 	ms.AddCounter("PollCount", 42)
 
 	h := GetMetricJSON(ms)
@@ -111,7 +111,7 @@ func TestGetMetricJson_CounterResponseBody(t *testing.T) {
 }
 
 func TestGetMetricJson_GaugeResponseBody(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 	ms.SetGauge("Alloc", 3.14)
 
 	h := GetMetricJSON(ms)

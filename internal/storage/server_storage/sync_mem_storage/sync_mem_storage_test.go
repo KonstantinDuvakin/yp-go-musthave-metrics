@@ -1,4 +1,4 @@
-package sync_mem_storage
+package syncmemstorage
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 func TestSaveAndRestore_RoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 
-	src := mem_storage.NewMemStorage()
+	src := memstorage.NewMemStorage()
 	src.AddCounter("PollCount", 5)
 	src.SetGauge("Alloc", 3.5)
 
@@ -19,7 +19,7 @@ func TestSaveAndRestore_RoundTrip(t *testing.T) {
 		t.Fatalf("SaveMetricsToFile: %v", err)
 	}
 
-	dst := mem_storage.NewMemStorage()
+	dst := memstorage.NewMemStorage()
 	if err := dst.RestoreFromFile(path); err != nil {
 		t.Fatalf("RestoreFromFile: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestSaveAndRestore_RoundTrip(t *testing.T) {
 func TestSaveMetricsToFile_WritesToGivenPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "out.json")
 
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 	ms.AddCounter("c", 1)
 
 	if err := ms.SaveMetricsToFile(path); err != nil {
@@ -52,7 +52,7 @@ func TestSaveMetricsToFile_WritesToGivenPath(t *testing.T) {
 }
 
 func TestRestoreFromFile_MissingFile(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 
 	err := ms.RestoreFromFile(filepath.Join(t.TempDir(), "does-not-exist.json"))
 	if err == nil {
@@ -63,13 +63,13 @@ func TestRestoreFromFile_MissingFile(t *testing.T) {
 func TestSyncMemStorage_PersistsAfterClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sync.json")
 
-	store := NewSyncMemStorage(mem_storage.NewMemStorage(), path)
+	store := NewSyncMemStorage(memstorage.NewMemStorage(), path)
 	store.AddCounter("PollCount", 7)
 	store.SetGauge("Alloc", 2.5)
 
 	store.Close()
 
-	restored := mem_storage.NewMemStorage()
+	restored := memstorage.NewMemStorage()
 	if err := restored.RestoreFromFile(path); err != nil {
 		t.Fatalf("RestoreFromFile после Close: %v", err)
 	}

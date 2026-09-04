@@ -8,13 +8,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/get_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage/mem_storage"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMiddleware(t *testing.T) {
-	ms := &mem_storage.MemStorage{
+	ms := &memstorage.MemStorage{
 		Gauge: map[string]float64{
 			"Alloc": 7.52,
 		},

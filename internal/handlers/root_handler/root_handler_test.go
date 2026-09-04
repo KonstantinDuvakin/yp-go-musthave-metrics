@@ -1,4 +1,4 @@
-package root_handler
+package roothandler
 
 import (
 	"io"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestRootHandler_OK_EmptyStorage(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 
 	h := RootHandler(ms)
 
@@ -44,7 +44,7 @@ func TestRootHandler_OK_EmptyStorage(t *testing.T) {
 }
 
 func TestRootHandler_OK_WithMetrics(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 
 	ms.SetGauge("Alloc", 123.5)
 	ms.SetGauge("RandomValue", 0.25)

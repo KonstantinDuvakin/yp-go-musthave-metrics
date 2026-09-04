@@ -1,4 +1,4 @@
-package save_to_file
+package savetofile
 
 import (
 	"context"
@@ -15,7 +15,7 @@ func TestSaveToFile_ZeroInterval(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	c := &config.ServerConfig{StoreInterval: 0, FileStoragePath: path}
 
-	store := mem_storage.NewMemStorage()
+	store := memstorage.NewMemStorage()
 	store.AddCounter("c", 1)
 
 	done := make(chan struct{})
@@ -36,7 +36,7 @@ func TestSaveToFile_GracefulSaveOnCancel(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	c := &config.ServerConfig{StoreInterval: 3600, FileStoragePath: path}
 
-	store := mem_storage.NewMemStorage()
+	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 42)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -51,7 +51,7 @@ func TestSaveToFile_GracefulSaveOnCancel(t *testing.T) {
 		t.Fatal("SaveToFile не завершилась после отмены контекста")
 	}
 
-	check := mem_storage.NewMemStorage()
+	check := memstorage.NewMemStorage()
 	if err := check.RestoreFromFile(path); err != nil {
 		t.Fatalf("RestoreFromFile: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestSaveToFile_TickerWritesPeriodically(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	c := &config.ServerConfig{StoreInterval: 1, FileStoragePath: path}
 
-	store := mem_storage.NewMemStorage()
+	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 99)
 
 	ctx, cancel := context.WithCancel(context.Background())

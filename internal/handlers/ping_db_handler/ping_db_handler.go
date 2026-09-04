@@ -1,4 +1,4 @@
-package ping_db_handler
+package pingdbhandler
 
 import (
 	"context"

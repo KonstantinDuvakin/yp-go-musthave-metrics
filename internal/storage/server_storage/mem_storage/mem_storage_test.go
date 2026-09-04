@@ -1,4 +1,4 @@
-package mem_storage
+package memstorage
 
 import (
 	"testing"
@@ -89,7 +89,7 @@ func TestMemStorage_SetGauge(t *testing.T) {
 }
 
 func TestNewAgentStorage(t *testing.T) {
-	as := agent_storage.NewAgentStorage()
+	as := agentstorage.NewAgentStorage()
 	if as == nil {
 		t.Fatal("NewAgentStorage returned nil")
 	}

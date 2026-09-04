@@ -1,4 +1,4 @@
-package update_batch_metrics
+package updatebatchmetrics
 
 import (
 	"encoding/json"

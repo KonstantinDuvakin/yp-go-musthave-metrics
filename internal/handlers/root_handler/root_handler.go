@@ -1,4 +1,4 @@
-package root_handler
+package roothandler
 
 import (
 	"fmt"

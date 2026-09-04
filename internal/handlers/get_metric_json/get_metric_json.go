@@ -1,4 +1,4 @@
-package get_metric_json
+package getmetricjson
 
 import (
 	"encoding/json"

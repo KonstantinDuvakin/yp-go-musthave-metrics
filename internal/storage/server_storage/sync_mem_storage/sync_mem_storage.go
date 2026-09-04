@@ -1,4 +1,4 @@
-package sync_mem_storage
+package syncmemstorage
 
 import (
 	"context"

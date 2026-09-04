@@ -18,7 +18,7 @@ func main() {
 	flag.Parse()
 	c.ApplyEnv()
 
-	store := agent_storage.NewAgentStorage()
+	store := agentstorage.NewAgentStorage()
 	send := sender.NewSender(c.Address)
 	agent := New(store, send)
 

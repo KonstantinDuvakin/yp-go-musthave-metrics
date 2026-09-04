@@ -1,4 +1,4 @@
-package get_metric_handler
+package getmetrichandler
 
 import (
 	"io"

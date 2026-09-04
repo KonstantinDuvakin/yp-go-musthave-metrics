@@ -1,4 +1,4 @@
-package server_storage
+package serverstorage
 
 import (
 	"context"
@@ -33,11 +33,11 @@ func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.Metri
 			return nil, nil, nil, err
 		}
 
-		store := db_storage.NewDBStorage(db)
+		store := dbstorage.NewDBStorage(db)
 		return store, db, func() { db.Close() }, nil
 	}
 
-	base := mem_storage.NewMemStorage()
+	base := memstorage.NewMemStorage()
 	var store storage.MetricsStorage = base
 	var shutdown = func() {}
 
@@ -48,12 +48,12 @@ func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.Metri
 	}
 
 	if config.StoreInterval == 0 {
-		syncStore := sync_mem_storage.NewSyncMemStorage(base, config.FileStoragePath)
+		syncStore := syncmemstorage.NewSyncMemStorage(base, config.FileStoragePath)
 		store = syncStore
 		shutdown = syncStore.Close
 	} else {
 		done := make(chan struct{})
-		go save_to_file.SaveToFile(ctx, config, base, done)
+		go savetofile.SaveToFile(ctx, config, base, done)
 		shutdown = func() { <-done }
 	}
 

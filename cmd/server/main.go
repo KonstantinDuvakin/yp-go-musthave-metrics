@@ -42,18 +42,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store, db, shutdown, err := server_storage.NewStorage(ctx, c)
+	store, db, shutdown, err := serverstorage.NewStorage(ctx, c)
 	if err != nil {
 		logger.Log.Fatal("Failed to initialize storage", zap.Error(err))
 	}
 
-	var pinger ping_db_handler.Pinger
+	var pinger pingdbhandler.Pinger
 	if db != nil {
 		pinger = db
 	}
 
 	auditDoneCh := make(chan struct{})
-	auditService := send_to_audit.NewAuditService(c.AuditFile, c.AuditURL)
+	auditService := sendtoaudit.NewAuditService(c.AuditFile, c.AuditURL)
 	go func() {
 		auditService.Start()
 		close(auditDoneCh)
@@ -65,19 +65,19 @@ func main() {
 		r.Use(gzip.Middleware)
 		r.Use(hash.HashMiddleware(c.Key))
 
-		r.Get("/", root_handler.RootHandler(store))
+		r.Get("/", roothandler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", update_metric_json.UpdateMetricJSON(store))
-			r.Post(`/{type}/{name}/{value}`, update_handler.UpdateHandler(store))
+			r.Post("/", updatemetricjson.UpdateMetricJSON(store))
+			r.Post(`/{type}/{name}/{value}`, updatehandler.UpdateHandler(store))
 		})
 		r.Route("/updates", func(r chi.Router) {
-			r.Post("/", update_batch_metrics.UpdateBatchMetrics(store, auditService.SendEvent))
+			r.Post("/", updatebatchmetrics.UpdateBatchMetrics(store, auditService.SendEvent))
 		})
 		r.Route("/value", func(r chi.Router) {
-			r.Post("/", get_metric_json.GetMetricJSON(store))
-			r.Get(`/{type}/{name}`, get_metric_handler.GetMetricHandler(store))
+			r.Post("/", getmetricjson.GetMetricJSON(store))
+			r.Get(`/{type}/{name}`, getmetrichandler.GetMetricHandler(store))
 		})
-		r.Get("/ping", ping_db_handler.PingDBHandler(pinger))
+		r.Get("/ping", pingdbhandler.PingDBHandler(pinger))
 	})
 
 	r.Mount("/debug", middleware.Profiler())

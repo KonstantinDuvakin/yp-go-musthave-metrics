@@ -1,4 +1,4 @@
-package update_metric_json
+package updatemetricjson
 
 import (
 	"encoding/json"

@@ -1,4 +1,4 @@
-package update_handler
+package updatehandler
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func newTestRouter(ms *mem_storage.MemStorage) http.Handler {
+func newTestRouter(ms *memstorage.MemStorage) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", UpdateHandler(ms))
 	return r
@@ -71,7 +71,7 @@ func TestUpdateHandler_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := mem_storage.NewMemStorage()
+			ms := memstorage.NewMemStorage()
 			router := newTestRouter(ms)
 
 			req := httptest.NewRequest(tt.method, tt.path, nil)

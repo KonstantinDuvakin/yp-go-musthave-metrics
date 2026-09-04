@@ -1,4 +1,4 @@
-package save_to_file
+package savetofile
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package update_batch_metrics
+package updatebatchmetrics
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage/mem_storage"
 )
 
-func doRequest(t *testing.T, store *mem_storage.MemStorage, body []byte) *httptest.ResponseRecorder {
+func doRequest(t *testing.T, store *memstorage.MemStorage, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/updates/", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -22,7 +22,7 @@ func doRequest(t *testing.T, store *mem_storage.MemStorage, body []byte) *httpte
 }
 
 func TestUpdateBatchMetrics_OK(t *testing.T) {
-	store := mem_storage.NewMemStorage()
+	store := memstorage.NewMemStorage()
 
 	gv := 2.5
 	var cd int64 = 4
@@ -46,14 +46,14 @@ func TestUpdateBatchMetrics_OK(t *testing.T) {
 }
 
 func TestUpdateBatchMetrics_InvalidJSON(t *testing.T) {
-	store := mem_storage.NewMemStorage()
+	store := memstorage.NewMemStorage()
 	rec := doRequest(t, store, []byte(`{ broken`))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 // counter без delta → SaveMetricsBatch вернёт ошибку → 500
 func TestUpdateBatchMetrics_StorageError(t *testing.T) {
-	store := mem_storage.NewMemStorage()
+	store := memstorage.NewMemStorage()
 	rec := doRequest(t, store, []byte(`[{"id":"PollCount","type":"counter"}]`))
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }

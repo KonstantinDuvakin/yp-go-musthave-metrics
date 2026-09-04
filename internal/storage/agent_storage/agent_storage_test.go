@@ -1,4 +1,4 @@
-package agent_storage
+package agentstorage
 
 import (
 	"testing"

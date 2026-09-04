@@ -1,4 +1,4 @@
-package update_metric_json
+package updatemetricjson
 
 import (
 	"net/http"
@@ -62,7 +62,7 @@ func TestUpdateMetricJson_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ms := mem_storage.NewMemStorage()
+			ms := memstorage.NewMemStorage()
 			h := UpdateMetricJSON(ms)
 
 			req := httptest.NewRequest(http.MethodPost, "/update/", strings.NewReader(tt.body))
@@ -81,7 +81,7 @@ func TestUpdateMetricJson_StatusCodes(t *testing.T) {
 }
 
 func TestUpdateMetricJson_StoresGauge(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 	h := UpdateMetricJSON(ms)
 
 	body := `{"id":"Alloc","type":"gauge","value":42.5}`
@@ -104,7 +104,7 @@ func TestUpdateMetricJson_StoresGauge(t *testing.T) {
 }
 
 func TestUpdateMetricJson_CounterAccumulates(t *testing.T) {
-	ms := mem_storage.NewMemStorage()
+	ms := memstorage.NewMemStorage()
 	h := UpdateMetricJSON(ms)
 
 	send := func(delta int64) {

@@ -1,4 +1,4 @@
-package server_storage
+package serverstorage
 
 import (
 	"context"

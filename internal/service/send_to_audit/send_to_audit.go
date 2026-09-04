@@ -1,4 +1,4 @@
-package send_to_audit
+package sendtoaudit
 
 import (
 	"bytes"

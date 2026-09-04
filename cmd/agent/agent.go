@@ -14,11 +14,11 @@ import (
 )
 
 type Agent struct {
-	storage *agent_storage.AgentStorage
+	storage *agentstorage.AgentStorage
 	sender  *sender.Sender
 }
 
-func New(storage *agent_storage.AgentStorage, sender *sender.Sender) *Agent {
+func New(storage *agentstorage.AgentStorage, sender *sender.Sender) *Agent {
 	return &Agent{
 		storage: storage,
 		sender:  sender,
