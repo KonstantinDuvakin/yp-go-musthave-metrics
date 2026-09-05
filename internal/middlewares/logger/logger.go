@@ -1,3 +1,5 @@
+// Package logger предоставляет общий структурированный логгер приложения и
+// HTTP-middleware для логирования запросов.
 package logger
 
 import (
@@ -7,8 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// Log — глобальный логгер приложения. До вызова [InitializeLogger] это
+// no-op логгер, который ничего не пишет.
 var Log = zap.NewNop()
 
+// InitializeLogger настраивает глобальный [Log] на продакшн-конфигурацию с
+// уровнем логирования level (например, "info", "debug"). Возвращает ошибку
+// при некорректном уровне или сбое инициализации.
 func InitializeLogger(level string) error {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
@@ -51,6 +58,8 @@ func (lrw *loggerResponseWriter) WriteHeader(statusCode int) {
 	lrw.responseData.status = statusCode
 }
 
+// RequestLogger оборачивает h, логируя каждый запрос: HTTP-метод, URI и
+// длительность обработки, а также статус и размер ответа — через [Log].
 func RequestLogger(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

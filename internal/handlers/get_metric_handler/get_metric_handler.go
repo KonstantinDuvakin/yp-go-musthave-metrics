@@ -1,3 +1,5 @@
+// Package getmetrichandler содержит HTTP-обработчик получения значения одной
+// метрики по типу и имени из параметров URL.
 package getmetrichandler
 
 import (
@@ -12,6 +14,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// GetMetricHandler возвращает обработчик GET /value/{type}/{name},
+// отдающий текущее значение метрики текстом.
+//
+// Тип и имя берутся из параметров пути. Отвечает 200 и значением при
+// успехе, 404 при отсутствии метрики или неизвестном типе, 500 при ошибке
+// хранилища.
 func GetMetricHandler(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "type")

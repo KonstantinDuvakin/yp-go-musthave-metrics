@@ -1,3 +1,5 @@
+// Package roothandler содержит HTTP-обработчик корневой страницы со списком
+// всех метрик в формате HTML.
 package roothandler
 
 import (
@@ -9,6 +11,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// RootHandler возвращает обработчик GET /, выводящий HTML-страницу со всеми
+// gauge- и counter-метриками из storage.
+//
+// Отвечает 200 и HTML при успехе, 500 при ошибке хранилища.
 func RootHandler(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gauges, err := storage.GetAllGauges()

@@ -1,3 +1,6 @@
+// Package savetofile периодически сохраняет метрики в файл.
+//
+// Интервал сохранения и путь к файлу задаются в конфигурации сервера.
 package savetofile
 
 import (
@@ -10,6 +13,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// SaveToFile периодически сохраняет метрики store в файл с интервалом
+// c.StoreInterval секунд, пока не будет отменён ctx.
+//
+// Предназначен для запуска в отдельной горутине. При отмене ctx выполняет
+// финальное сохранение и закрывает канал done, сигнализируя о завершении.
+// При c.StoreInterval <= 0 сразу закрывает done и ничего не делает.
 func SaveToFile(ctx context.Context, c *config.ServerConfig, store storage.FilePersistentStorage, done chan<- struct{}) {
 	defer close(done)
 

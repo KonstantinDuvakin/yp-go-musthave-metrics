@@ -1,3 +1,5 @@
+// Package memstorage реализует потокобезопасное in-memory хранилище метрик
+// сервера с возможностью сохранения и восстановления состояния через файл.
 package memstorage
 
 import (
@@ -14,12 +16,15 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 )
 
+// MemStorage — in-memory реализация [storage.ServerStorage]. Хранит метрики
+// в картах и защищает доступ RWMutex.
 type MemStorage struct {
 	Gauge   storage.GaugeMap
 	Counter storage.CounterMap
 	mu      sync.RWMutex
 }
 
+// NewMemStorage создаёт пустое [MemStorage] с проинициализированными картами.
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		Gauge:   make(storage.GaugeMap),
@@ -28,6 +33,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
+// SetGauge устанавливает значение gauge-метрики field, перезаписывая прежнее.
 func (ms *MemStorage) SetGauge(field string, value float64) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -35,6 +41,7 @@ func (ms *MemStorage) SetGauge(field string, value float64) error {
 	return nil
 }
 
+// AddCounter увеличивает counter-метрику field на value.
 func (ms *MemStorage) AddCounter(field string, value int64) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -42,6 +49,7 @@ func (ms *MemStorage) AddCounter(field string, value int64) error {
 	return nil
 }
 
+// GetGauge возвращает значение gauge-метрики field и признак её наличия.
 func (ms *MemStorage) GetGauge(field string) (float64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -49,6 +57,7 @@ func (ms *MemStorage) GetGauge(field string) (float64, bool, error) {
 	return res, ok, nil
 }
 
+// GetCounter возвращает значение counter-метрики field и признак её наличия.
 func (ms *MemStorage) GetCounter(field string) (int64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -56,18 +65,22 @@ func (ms *MemStorage) GetCounter(field string) (int64, bool, error) {
 	return res, ok, nil
 }
 
+// GetAllGauges возвращает копию карты всех gauge-метрик.
 func (ms *MemStorage) GetAllGauges() (storage.GaugeMap, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return maps.Clone(ms.Gauge), nil
 }
 
+// GetAllCounters возвращает копию карты всех counter-метрик.
 func (ms *MemStorage) GetAllCounters() (storage.CounterMap, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return maps.Clone(ms.Counter), nil
 }
 
+// SaveMetricsToFile сохраняет все метрики в файл filename, по одной метрике
+// в формате JSON на строку. Существующий файл перезаписывается.
 func (ms *MemStorage) SaveMetricsToFile(filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -99,6 +112,9 @@ func (ms *MemStorage) SaveMetricsToFile(filename string) error {
 	return writer.Flush()
 }
 
+// RestoreFromFile восстанавливает метрики из файла filename, записанного
+// методом [MemStorage.SaveMetricsToFile]. Возвращает ошибку при некорректном
+// формате или неизвестном типе метрики.
 func (ms *MemStorage) RestoreFromFile(filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -130,6 +146,10 @@ func (ms *MemStorage) RestoreFromFile(filename string) error {
 	return scanner.Err()
 }
 
+// SaveMetricsBatch применяет к хранилищу пакет метрик: gauge перезаписывает
+// значение, counter суммируется. Возвращает ошибку при пустом значении или
+// неизвестном типе метрики. ctx не используется и присутствует для
+// соответствия интерфейсу [storage.MetricsStorage].
 func (ms *MemStorage) SaveMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
 	for _, m := range metrics {
 		switch m.MType {

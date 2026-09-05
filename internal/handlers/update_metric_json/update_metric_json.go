@@ -1,3 +1,5 @@
+// Package updatemetricjson содержит HTTP-обработчик обновления одной метрики,
+// переданной в теле запроса в формате JSON.
 package updatemetricjson
 
 import (
@@ -10,6 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// UpdateMetricJSON возвращает обработчик POST /update, сохраняющий одну
+// метрику из JSON-тела запроса ([models.Metrics]).
+//
+// Для counter обязательно поле Delta, для gauge — Value. Отвечает 200 при
+// успехе, 400 при некорректном JSON, пустом ID, отсутствующем значении или
+// неизвестном типе, 500 при ошибке хранилища.
 func UpdateMetricJSON(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req models.Metrics

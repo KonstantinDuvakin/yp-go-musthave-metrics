@@ -1,3 +1,5 @@
+// Package sendtoaudit асинхронно доставляет события аудита в файл и/или на
+// внешний URL через фоновые горутины.
 package sendtoaudit
 
 import (
@@ -14,6 +16,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// AuditService асинхронно записывает события аудита в файл и/или отправляет
+// их на HTTP-эндпоинт. Каждое направление обслуживается своей горутиной,
+// запускаемой методом [AuditService.Start].
 type AuditService struct {
 	filename string
 	url      string
@@ -26,6 +31,9 @@ type AuditService struct {
 
 type auditFunc func(auditData models.Audit) error
 
+// NewAuditService создаёт [AuditService]. Направление доставки включается
+// непустым аргументом: auditFile — путь к файлу аудита, auditURL — адрес
+// HTTP-эндпоинта. Пустой аргумент отключает соответствующее направление.
 func NewAuditService(auditFile, auditURL string) *AuditService {
 	var fileCh chan models.Audit
 	var urlCh chan models.Audit
@@ -49,17 +57,26 @@ func NewAuditService(auditFile, auditURL string) *AuditService {
 	}
 }
 
+// Start запускает фоновые горутины доставки событий. Вызывается один раз
+// перед использованием [AuditService.SendEvent].
 func (a *AuditService) Start() {
 	a.wg.Add(2)
 	go a.auditWriter(a.fileCh, a.auditToFile)
 	go a.auditWriter(a.urlCh, a.auditToURL)
 }
 
+// Stop сигнализирует горутинам о завершении, дожидается обработки уже
+// накопленных событий и возвращает управление. После вызова сервис
+// использовать нельзя.
 func (a *AuditService) Stop() {
 	close(a.doneCh)
 	a.wg.Wait()
 }
 
+// SendEvent передаёт событие аудита во включённые направления доставки.
+// Метод неблокирующий по завершении сервиса: после [AuditService.Stop]
+// событие может быть отброшено. Подходит на роль audit-функции для
+// [updatebatchmetrics.UpdateBatchMetrics].
 func (a *AuditService) SendEvent(event models.Audit) {
 	if a.fileCh != nil {
 		select {

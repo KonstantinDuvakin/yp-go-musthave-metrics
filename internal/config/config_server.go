@@ -6,17 +6,23 @@ import (
 	"strconv"
 )
 
+// ServerConfig — настройки сервера сбора метрик.
 type ServerConfig struct {
-	Address         string
-	StoreInterval   int
-	FileStoragePath string
-	Restore         bool
-	DB              string
-	Key             string
-	AuditFile       string
-	AuditURL        string
+	Address         string // адрес прослушивания HTTP, host:port
+	StoreInterval   int    // интервал сохранения в файл, секунд (0 — синхронно)
+	FileStoragePath string // путь к файлу хранения метрик
+	Restore         bool   // восстанавливать ли метрики из файла при старте
+	DB              string // DSN для подключения к БД (пусто — in-memory)
+	Key             string // ключ для проверки/подписи запросов
+	AuditFile       string // путь к файлу аудита (пусто — выключен)
+	AuditURL        string // URL для отправки аудита (пусто — выключен)
 }
 
+// NewConfigServer создаёт [ServerConfig] и регистрирует флаги командной
+// строки со значениями по умолчанию.
+//
+// Флаги ещё не разобраны: после вызова нужно выполнить flag.Parse(), а
+// затем [ServerConfig.ApplyEnv].
 func NewConfigServer() *ServerConfig {
 	sc := &ServerConfig{}
 
@@ -32,6 +38,10 @@ func NewConfigServer() *ServerConfig {
 	return sc
 }
 
+// ApplyEnv переопределяет значения конфигурации переменными окружения,
+// если они заданы: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE,
+// DATABASE_DSN, KEY, AUDIT_FILE, AUDIT_URL. Переменные имеют приоритет
+// над флагами командной строки.
 func (sc *ServerConfig) ApplyEnv() {
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		sc.Address = envAddress

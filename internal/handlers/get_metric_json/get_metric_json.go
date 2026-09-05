@@ -1,3 +1,5 @@
+// Package getmetricjson содержит HTTP-обработчик получения значения метрики
+// по JSON-запросу.
 package getmetricjson
 
 import (
@@ -10,6 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// GetMetricJSON возвращает обработчик POST /value, принимающий [models.Metrics]
+// с полями ID и MType и отдающий эту же метрику с заполненным значением
+// (Delta или Value) в формате JSON.
+//
+// Отвечает 200 и метрикой при успехе, 400 при некорректном JSON, 404 при
+// отсутствии метрики или неизвестном типе, 500 при ошибке хранилища.
 func GetMetricJSON(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req models.Metrics

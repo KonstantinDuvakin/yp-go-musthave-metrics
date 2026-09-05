@@ -1,3 +1,5 @@
+// Package collector собирает метрики среды выполнения: показатели рантайма
+// Go и данные о памяти и загрузке CPU системы.
 package collector
 
 import (
@@ -9,6 +11,9 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
+// Collector собирает метрики рантайма Go через runtime.ReadMemStats и
+// возвращает их как мапу имя -> значение. Дополнительно добавляет
+// случайную метрику RandomValue.
 func Collector() map[string]float64 {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -45,6 +50,9 @@ func Collector() map[string]float64 {
 	}
 }
 
+// GopsCollector собирает метрики системы через gopsutil: общий и свободный
+// объём памяти и загрузку каждого логического CPU (CPUutilizationN).
+// Возвращает их как мапу имя -> значение.
 func GopsCollector() map[string]float64 {
 	v, _ := mem.VirtualMemory()
 	cpus, _ := cpu.Percent(0, true)

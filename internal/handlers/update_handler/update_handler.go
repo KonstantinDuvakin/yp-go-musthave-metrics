@@ -1,3 +1,5 @@
+// Package updatehandler содержит HTTP-обработчик обновления одной метрики,
+// переданной в параметрах URL.
 package updatehandler
 
 import (
@@ -11,6 +13,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// UpdateHandler возвращает обработчик POST /update/{type}/{name}/{value},
+// сохраняющий одну метрику в storage.
+//
+// Тип, имя и значение берутся из параметров пути. Отвечает 200 при успехе,
+// 400 при неверном типе или значении, 404 при отсутствии имени и 500 при
+// ошибке хранилища.
 func UpdateHandler(storage storage.MetricsStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "type")

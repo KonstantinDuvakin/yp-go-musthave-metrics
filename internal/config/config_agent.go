@@ -1,3 +1,5 @@
+// Package config описывает конфигурацию агента и сервера и её загрузку из
+// флагов командной строки и переменных окружения.
 package config
 
 import (
@@ -7,14 +9,21 @@ import (
 	"strconv"
 )
 
+// AgentConfig — настройки агента сбора метрик.
 type AgentConfig struct {
-	Address   string
-	PollSec   int
-	ReportSec int
-	Key       string
-	RateLimit int
+	Address   string // адрес сервера в формате host:port
+	PollSec   int    // интервал опроса метрик, секунд
+	ReportSec int    // интервал отправки метрик на сервер, секунд
+	Key       string // ключ для подписи запросов (пусто — без подписи)
+	RateLimit int    // максимум одновременных исходящих запросов
 }
 
+// NewConfigAgent создаёт [AgentConfig] и регистрирует флаги командной
+// строки со значениями по умолчанию.
+//
+// Флаги ещё не разобраны: после вызова нужно выполнить flag.Parse(), а
+// затем [AgentConfig.ApplyEnv], чтобы переменные окружения переопределили
+// значения флагов.
 func NewConfigAgent() *AgentConfig {
 	ac := &AgentConfig{}
 
@@ -27,6 +36,9 @@ func NewConfigAgent() *AgentConfig {
 	return ac
 }
 
+// ApplyEnv переопределяет значения конфигурации переменными окружения,
+// если они заданы: ADDRESS, POLL_INTERVAL, REPORT_INTERVAL, KEY,
+// RATE_LIMIT. Переменные имеют приоритет над флагами командной строки.
 func (ac *AgentConfig) ApplyEnv() {
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		ac.Address = envAddress

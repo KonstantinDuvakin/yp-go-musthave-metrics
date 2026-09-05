@@ -1,3 +1,5 @@
+// Package hash предоставляет HTTP-middleware, проверяющее подпись входящего
+// запроса и подписывающее ответ по алгоритму HMAC-SHA256.
 package hash
 
 import (
@@ -23,6 +25,13 @@ func (hrw *hashResponseWriter) Write(b []byte) (int, error) {
 	return hrw.responseDataBuffer.Write(b)
 }
 
+// HashMiddleware возвращает middleware, проверяющее и добавляющее подпись
+// HMAC-SHA256 с ключом key.
+//
+// При пустом key middleware отключено и пропускает запросы без изменений.
+// Иначе: если в запросе есть заголовок HashSHA256, тело проверяется на
+// соответствие подписи (при несовпадении — 400); ответ подписывается тем
+// же ключом и подпись добавляется в заголовок HashSHA256.
 func HashMiddleware(key string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {

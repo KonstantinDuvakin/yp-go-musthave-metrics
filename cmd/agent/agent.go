@@ -13,11 +13,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// Agent связывает хранилище собранных метрик и отправитель на сервер.
 type Agent struct {
 	storage *agentstorage.AgentStorage
 	sender  *sender.Sender
 }
 
+// New создаёт [Agent] с заданными хранилищем и отправителем.
 func New(storage *agentstorage.AgentStorage, sender *sender.Sender) *Agent {
 	return &Agent{
 		storage: storage,
@@ -25,6 +27,12 @@ func New(storage *agentstorage.AgentStorage, sender *sender.Sender) *Agent {
 	}
 }
 
+// Run запускает рабочие циклы агента и блокируется до отмены ctx.
+//
+// Метрики рантайма и системы опрашиваются с интервалом poll, накопленный
+// пакет отправляется на сервер с интервалом report. Отправку выполняют
+// limit параллельных воркеров; hashKey, если не пуст, используется для
+// подписи запросов. По отмене ctx все горутины корректно завершаются.
 func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey string, limit int) {
 	pollTicker := time.NewTicker(poll)
 	defer pollTicker.Stop()
