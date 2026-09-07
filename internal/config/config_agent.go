@@ -45,17 +45,20 @@ func (ac *AgentConfig) ApplyEnv() {
 	}
 
 	if envPollSec := os.Getenv("POLL_INTERVAL"); envPollSec != "" {
-		if v, err := strconv.Atoi(envPollSec); err == nil {
+		if v, err := strconv.Atoi(envPollSec); err == nil && v > 0 {
 			ac.PollSec = v
+		} else {
+			fmt.Printf("Invalid POLL_INTERVAL value: %s\n", envPollSec)
 		}
 	}
 
 	if envReportSec := os.Getenv("REPORT_INTERVAL"); envReportSec != "" {
-		v, err := strconv.Atoi(envReportSec)
-		if err != nil {
+		if v, err := strconv.Atoi(envReportSec); err == nil && v > 0 {
+			ac.ReportSec = v
+		} else {
 			fmt.Printf("Invalid REPORT_INTERVAL value: %s\n", envReportSec)
 		}
-		ac.ReportSec = v
+
 	}
 
 	if envKey := os.Getenv("KEY"); envKey != "" {
