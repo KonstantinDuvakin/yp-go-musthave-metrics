@@ -1,3 +1,6 @@
+// Команда server принимает метрики от агентов по HTTP, хранит их в памяти
+// или в базе данных и отдаёт по запросу. Параметры задаются флагами и
+// переменными окружения (см. [config.ServerConfig]).
 package main
 
 import (
@@ -5,23 +8,27 @@ import (
 	"errors"
 	"flag"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/getMetricJson"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/pingDBHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/rootHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateBatchMetrics"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateHandler"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/updateMetricJson"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/get_metric_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/get_metric_json"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/ping_db_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/root_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_batch_metrics"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/serverStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/send_to_audit"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 )
 
@@ -38,35 +45,45 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store, db, shutdown, err := serverStorage.NewStorage(ctx, c)
+	store, db, shutdown, err := serverstorage.NewStorage(ctx, c)
 	if err != nil {
 		logger.Log.Fatal("Failed to initialize storage", zap.Error(err))
 	}
 
-	var pinger pingDBHandler.Pinger
+	var pinger pingdbhandler.Pinger
 	if db != nil {
 		pinger = db
 	}
+
+	auditDoneCh := make(chan struct{})
+	auditService := sendtoaudit.NewAuditService(c.AuditFile, c.AuditURL)
+	go func() {
+		auditService.Start()
+		close(auditDoneCh)
+	}()
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
 		r.Use(gzip.Middleware)
+		r.Use(hash.HashMiddleware(c.Key))
 
-		r.Get("/", rootHandler.RootHandler(store))
+		r.Get("/", roothandler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", updateMetricJson.UpdateMetricJson(store))
-			r.Post(`/{type}/{name}/{value}`, updateHandler.UpdateHandler(store))
+			r.Post("/", updatemetricjson.UpdateMetricJSON(store))
+			r.Post(`/{type}/{name}/{value}`, updatehandler.UpdateHandler(store))
 		})
 		r.Route("/updates", func(r chi.Router) {
-			r.Post("/", updateBatchMetrics.UpdateBatchMetrics(store))
+			r.Post("/", updatebatchmetrics.UpdateBatchMetrics(store, auditService.SendEvent))
 		})
 		r.Route("/value", func(r chi.Router) {
-			r.Post("/", getMetricJson.GetMetricJson(store))
-			r.Get(`/{type}/{name}`, getMetricHandler.GetMetricHandler(store))
+			r.Post("/", getmetricjson.GetMetricJSON(store))
+			r.Get(`/{type}/{name}`, getmetrichandler.GetMetricHandler(store))
 		})
-		r.Get("/ping", pingDBHandler.PingDBHandler(pinger))
+		r.Get("/ping", pingdbhandler.PingDBHandler(pinger))
 	})
+
+	r.Mount("/debug", middleware.Profiler())
 
 	server := &http.Server{
 		Addr:    c.Address,
@@ -87,5 +104,7 @@ func main() {
 
 	_ = server.Shutdown(shutdownCtx)
 
+	auditService.Stop()
 	shutdown()
+	<-auditDoneCh
 }

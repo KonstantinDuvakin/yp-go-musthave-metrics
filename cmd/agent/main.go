@@ -1,3 +1,6 @@
+// Команда agent периодически собирает метрики среды выполнения и системы и
+// отправляет их на сервер сбора метрик. Параметры задаются флагами и
+// переменными окружения (см. [config.AgentConfig]).
 package main
 
 import (
@@ -10,7 +13,7 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agentStorage"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agent_storage"
 )
 
 func main() {
@@ -18,7 +21,7 @@ func main() {
 	flag.Parse()
 	c.ApplyEnv()
 
-	store := agentStorage.NewAgentStorage()
+	store := agentstorage.NewAgentStorage()
 	send := sender.NewSender(c.Address)
 	agent := New(store, send)
 
@@ -28,5 +31,5 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	agent.Run(ctx, pollInterval, reportInterval)
+	agent.Run(ctx, pollInterval, reportInterval, c.Key, c.RateLimit)
 }

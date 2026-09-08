@@ -6,14 +6,23 @@ import (
 	"strconv"
 )
 
+// ServerConfig — настройки сервера сбора метрик.
 type ServerConfig struct {
-	Address         string
-	StoreInterval   int
-	FileStoragePath string
-	Restore         bool
-	DB              string
+	Address         string // адрес прослушивания HTTP, host:port
+	StoreInterval   int    // интервал сохранения в файл, секунд (0 — синхронно)
+	FileStoragePath string // путь к файлу хранения метрик
+	Restore         bool   // восстанавливать ли метрики из файла при старте
+	DB              string // DSN для подключения к БД (пусто — in-memory)
+	Key             string // ключ для проверки/подписи запросов
+	AuditFile       string // путь к файлу аудита (пусто — выключен)
+	AuditURL        string // URL для отправки аудита (пусто — выключен)
 }
 
+// NewConfigServer создаёт [ServerConfig] и регистрирует флаги командной
+// строки со значениями по умолчанию.
+//
+// Флаги ещё не разобраны: после вызова нужно выполнить flag.Parse(), а
+// затем [ServerConfig.ApplyEnv].
 func NewConfigServer() *ServerConfig {
 	sc := &ServerConfig{}
 
@@ -22,10 +31,17 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.FileStoragePath, "f", "metrics_log.txt", "The file storage path.")
 	flag.BoolVar(&sc.Restore, "r", true, "Flag for restoring data from storage file.")
 	flag.StringVar(&sc.DB, "d", "", "Flag for database address.")
+	flag.StringVar(&sc.Key, "k", "", "key for hash.")
+	flag.StringVar(&sc.AuditFile, "audit-file", "", "path to audit file.")
+	flag.StringVar(&sc.AuditURL, "audit-url", "", "url for audit.")
 
 	return sc
 }
 
+// ApplyEnv переопределяет значения конфигурации переменными окружения,
+// если они заданы: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE,
+// DATABASE_DSN, KEY, AUDIT_FILE, AUDIT_URL. Переменные имеют приоритет
+// над флагами командной строки.
 func (sc *ServerConfig) ApplyEnv() {
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		sc.Address = envAddress
@@ -49,5 +65,17 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envDatabaseAddress := os.Getenv("DATABASE_DSN"); envDatabaseAddress != "" {
 		sc.DB = envDatabaseAddress
+	}
+
+	if envKey := os.Getenv("KEY"); envKey != "" {
+		sc.Key = envKey
+	}
+
+	if envAuditFile := os.Getenv("AUDIT_FILE"); envAuditFile != "" {
+		sc.AuditFile = envAuditFile
+	}
+
+	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
+		sc.AuditURL = envAuditURL
 	}
 }

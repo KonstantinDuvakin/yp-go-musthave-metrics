@@ -1,3 +1,5 @@
+// Package gzip предоставляет HTTP-middleware для прозрачного gzip-сжатия
+// ответов и распаковки сжатых запросов.
 package gzip
 
 import (
@@ -5,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type compressWriter struct {
@@ -12,10 +15,18 @@ type compressWriter struct {
 	zw *gzip.Writer
 }
 
+var writerPool = sync.Pool{
+	New: func() any {
+		return gzip.NewWriter(io.Discard)
+	},
+}
+
 func newCompressWriter(w http.ResponseWriter) *compressWriter {
+	zw := writerPool.Get().(*gzip.Writer)
+	zw.Reset(w)
 	return &compressWriter{
 		w:  w,
-		zw: gzip.NewWriter(w),
+		zw: zw,
 	}
 }
 
@@ -35,7 +46,9 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 }
 
 func (c *compressWriter) Close() error {
-	return c.zw.Close()
+	err := c.zw.Close()
+	writerPool.Put(c.zw)
+	return err
 }
 
 type compressReader struct {
@@ -66,6 +79,11 @@ func (c *compressReader) Close() error {
 	return c.zr.Close()
 }
 
+// Middleware оборачивает h, добавляя поддержку gzip.
+//
+// Если клиент прислал заголовок Accept-Encoding: gzip, ответ сжимается.
+// Если тело запроса пришло с Content-Encoding: gzip, оно прозрачно
+// распаковывается перед передачей в h.
 func Middleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
