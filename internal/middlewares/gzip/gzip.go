@@ -7,7 +7,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
+
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/pool"
 )
 
 type compressWriter struct {
@@ -15,19 +16,15 @@ type compressWriter struct {
 	zw *gzip.Writer
 }
 
-var writerPool = sync.Pool{
-	New: func() any {
-		return gzip.NewWriter(io.Discard)
-	},
-}
+var writerPool = pool.New(func() *compressWriter {
+	return &compressWriter{zw: gzip.NewWriter(io.Discard)}
+})
 
 func newCompressWriter(w http.ResponseWriter) *compressWriter {
-	zw := writerPool.Get().(*gzip.Writer)
-	zw.Reset(w)
-	return &compressWriter{
-		w:  w,
-		zw: zw,
-	}
+	cw := writerPool.Get()
+	cw.w = w
+	cw.zw.Reset(w)
+	return cw
 }
 
 func (c *compressWriter) Header() http.Header {
@@ -45,9 +42,14 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 	c.w.WriteHeader(statusCode)
 }
 
+func (c *compressWriter) Reset() {
+	c.w = nil
+	c.zw.Reset(io.Discard)
+}
+
 func (c *compressWriter) Close() error {
 	err := c.zw.Close()
-	writerPool.Put(c.zw)
+	writerPool.Put(c)
 	return err
 }
 
