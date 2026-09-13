@@ -26,7 +26,7 @@ func TestNew(t *testing.T) {
 
 	t.Run("infers_type_from_factory", func(t *testing.T) {
 		// Компилируется без явного указания [*item] — тип выведен из newFn.
-		var p *Pool[*item] = New(func() *item { return &item{} })
+		var p = New(func() *item { return &item{} })
 		require.NotNil(t, p)
 	})
 }
