@@ -22,6 +22,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_batch_metrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/build_info"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
@@ -32,7 +33,15 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
+
 	c := config.NewConfigServer()
 	flag.Parse()
 	c.ApplyEnv()
