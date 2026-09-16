@@ -2,7 +2,6 @@ package osexitchecker
 
 import (
 	"go/ast"
-	"go/types"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -41,7 +40,7 @@ func run(pass *analysis.Pass) (any, error) {
 						return true
 					}
 
-					fn, ok := pass.TypesInfo.ObjectOf(selExpr.Sel).(*types.Func)
+					fn, ok := pass.TypesInfo.Uses[selExpr.Sel]
 					if !ok {
 						return true
 					}

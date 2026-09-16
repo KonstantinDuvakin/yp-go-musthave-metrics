@@ -78,6 +78,15 @@ func ({{.ShortName}} *{{.Name}}) Reset() {
 var tmpl = template.Must(template.New("header").Parse(templateStr))
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "reset:", err)
+		os.Exit(1)
+	}
+}
+
+// run обходит текущую директорию, собирает структуры с маркером
+// generate:reset и записывает reset.gen.go в каждый пакет, где они найдены.
+func run() error {
 	fset := token.NewFileSet()
 
 	packages := map[string]*File{}
@@ -149,28 +158,30 @@ func main() {
 	})
 
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("обход директорий: %w", err)
 	}
 
 	for dir, file := range packages {
 		var buf bytes.Buffer
 		err = tmpl.Execute(&buf, file)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("%s: выполнение шаблона: %w", dir, err)
 		}
 
 		bufFmt, err := format.Source(buf.Bytes())
 		if err != nil {
-			fmt.Printf("=== %s: невалидный код ===\n%s\n", dir, buf.String())
-			panic(err)
+			fmt.Fprintf(os.Stderr, "=== %s: невалидный код ===\n%s\n", dir, buf.String())
+			return fmt.Errorf("%s: форматирование сгенерированного кода: %w", dir, err)
 		}
 
 		out := filepath.Join(dir, "reset.gen.go")
 		err = os.WriteFile(out, bufFmt, 0644)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("запись %s: %w", out, err)
 		}
 	}
+
+	return nil
 }
 
 // hasResetMarker сообщает, содержит ли группа комментариев строку

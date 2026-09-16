@@ -39,7 +39,13 @@ type Pool[T Resetter] struct {
 func New[T Resetter](newFn func() T) *Pool[T] {
 	return &Pool[T]{
 		p: sync.Pool{
-			New: func() any { return newFn() },
+			New: func() any {
+				if newFn == nil {
+					var zero T
+					return zero
+				}
+				return newFn()
+			},
 		},
 	}
 }

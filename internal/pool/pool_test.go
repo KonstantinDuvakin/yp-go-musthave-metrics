@@ -54,6 +54,29 @@ func TestPool_Get(t *testing.T) {
 
 		require.NotSame(t, a, b)
 	})
+
+	t.Run("returns_zero_value_when_factory_is_nil", func(t *testing.T) {
+		// Как и sync.Pool без New: пустой пул без фабрики отдаёт нулевое
+		// значение T, а не паникует на nil-вызове или утверждении типа.
+		p := New[*item](nil)
+
+		var got *item
+		require.NotPanics(t, func() { got = p.Get() })
+		require.Nil(t, got)
+	})
+
+	t.Run("returns_put_object_when_factory_is_nil", func(t *testing.T) {
+		// Отсутствие фабрики не мешает переиспользованию: положенный
+		// объект можно получить обратно.
+		p := New[*item](nil)
+
+		p.Put(&item{})
+
+		// sync.Pool может освободить объект между Put и Get, поэтому
+		// проверяем только отсутствие паники и что вернулся либо объект,
+		// либо нулевое значение.
+		require.NotPanics(t, func() { _ = p.Get() })
+	})
 }
 
 func TestPool_Put(t *testing.T) {

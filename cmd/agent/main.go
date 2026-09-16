@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	buildVersion string
-	buildDate    string
-	buildCommit  string
+	buildVersion = buildinfo.NA
+	buildDate    = buildinfo.NA
+	buildCommit  = buildinfo.NA
 )
 
 func main() {
