@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/pool"
 )
 
 type hashResponseWriter struct {
@@ -17,12 +18,33 @@ type hashResponseWriter struct {
 	statusCode         int
 }
 
+var hrwPool = pool.New(func() *hashResponseWriter {
+	return &hashResponseWriter{}
+})
+
+func newHashResponseWriter(rw http.ResponseWriter) *hashResponseWriter {
+	hrw := hrwPool.Get()
+	hrw.ResponseWriter = rw
+	hrw.statusCode = http.StatusOK
+	return hrw
+}
+
 func (hrw *hashResponseWriter) WriteHeader(code int) {
 	hrw.statusCode = code
 }
 
 func (hrw *hashResponseWriter) Write(b []byte) (int, error) {
 	return hrw.responseDataBuffer.Write(b)
+}
+
+func (hrw *hashResponseWriter) Reset() {
+	hrw.ResponseWriter = nil
+	hrw.responseDataBuffer.Reset()
+	hrw.statusCode = http.StatusOK
+}
+
+func (hrw *hashResponseWriter) Close() {
+	hrwPool.Put(hrw)
 }
 
 // HashMiddleware возвращает middleware, проверяющее и добавляющее подпись
@@ -40,7 +62,8 @@ func HashMiddleware(key string) func(http.Handler) http.Handler {
 				return
 			}
 
-			hrw := &hashResponseWriter{ResponseWriter: rw, statusCode: http.StatusOK}
+			hrw := newHashResponseWriter(rw)
+			defer hrw.Close()
 
 			gotHash := r.Header.Get("HashSHA256")
 
@@ -65,9 +88,8 @@ func HashMiddleware(key string) func(http.Handler) http.Handler {
 			h.ServeHTTP(hrw, r)
 
 			respBody := hrw.responseDataBuffer.Bytes()
-			if key != "" {
-				rw.Header().Add("HashSHA256", hash.CreateHeaderHash(respBody, key))
-			}
+
+			rw.Header().Add("HashSHA256", hash.CreateHeaderHash(respBody, key))
 			rw.WriteHeader(hrw.statusCode)
 			rw.Write(respBody)
 		})

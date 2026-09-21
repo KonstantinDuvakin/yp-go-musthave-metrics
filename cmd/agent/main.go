@@ -13,10 +13,19 @@ import (
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/build_info"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agent_storage"
 )
 
+var (
+	buildVersion = buildinfo.NA
+	buildDate    = buildinfo.NA
+	buildCommit  = buildinfo.NA
+)
+
 func main() {
+	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
+
 	c := config.NewConfigAgent()
 	flag.Parse()
 	c.ApplyEnv()

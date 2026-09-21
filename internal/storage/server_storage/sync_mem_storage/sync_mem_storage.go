@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
-	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"go.uber.org/zap"
 )
