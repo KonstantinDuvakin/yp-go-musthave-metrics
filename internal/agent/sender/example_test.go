@@ -53,7 +53,7 @@ func ExampleSender_SendMetricsBatch() {
 		{ID: "PollCount", MType: models.Counter, Delta: &delta},
 	}
 
-	if err := s.SendMetricsBatch(context.Background(), batch, ""); err != nil {
+	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err != nil {
 		fmt.Println("ошибка:", err)
 		return
 	}

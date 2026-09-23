@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"sync"
 	"time"
 
@@ -33,7 +34,7 @@ func New(storage *agentstorage.AgentStorage, sender *sender.Sender) *Agent {
 // пакет отправляется на сервер с интервалом report. Отправку выполняют
 // limit параллельных воркеров; hashKey, если не пуст, используется для
 // подписи запросов. По отмене ctx все горутины корректно завершаются.
-func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey string, limit int) {
+func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey string, limit int, pubKey *rsa.PublicKey) {
 	pollTicker := time.NewTicker(poll)
 	defer pollTicker.Stop()
 
@@ -53,7 +54,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				err := a.sender.SendMetricsBatch(ctx, job, hashKey)
+				err := a.sender.SendMetricsBatch(ctx, job, hashKey, pubKey)
 				if err != nil {
 					logger.Log.Error("Couldn't sent metric\nError: \n", zap.Error(err))
 				}

@@ -26,7 +26,7 @@ func okHandler(respBody string) http.Handler {
 
 // Без ключа middleware ничего не проверяет и не подписывает.
 func TestHashMiddleware_NoKey(t *testing.T) {
-	h := HashMiddleware("")(okHandler("pong"))
+	h := Middleware("")(okHandler("pong"))
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("data"))
 	rec := httptest.NewRecorder()
@@ -40,7 +40,7 @@ func TestHashMiddleware_NoKey(t *testing.T) {
 // Верный хэш запроса → 200, а ответ подписан хэшем от тела ответа.
 func TestHashMiddleware_ValidHash(t *testing.T) {
 	reqBody := []byte("request-data")
-	h := HashMiddleware(testKey)(okHandler("pong"))
+	h := Middleware(testKey)(okHandler("pong"))
 
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(reqBody))
 	req.Header.Set("HashSHA256", helper.CreateHeaderHash(reqBody, testKey))
@@ -57,7 +57,7 @@ func TestHashMiddleware_ValidHash(t *testing.T) {
 func TestHashMiddleware_InvalidHash(t *testing.T) {
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
-	h := HashMiddleware(testKey)(next)
+	h := Middleware(testKey)(next)
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("request-data"))
 	req.Header.Set("HashSHA256", "deadbeef") // заведомо неверный
@@ -70,7 +70,7 @@ func TestHashMiddleware_InvalidHash(t *testing.T) {
 
 // Ключ есть, но клиент хэш не прислал → пропускаем (лениво), ответ подписываем.
 func TestHashMiddleware_NoHashHeaderLenient(t *testing.T) {
-	h := HashMiddleware(testKey)(okHandler("pong"))
+	h := Middleware(testKey)(okHandler("pong"))
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("data"))
 	rec := httptest.NewRecorder()
@@ -86,7 +86,7 @@ func TestHashMiddleware_HandlerWithoutWriteHeader(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("pong")) // без WriteHeader
 	})
-	h := HashMiddleware(testKey)(next)
+	h := Middleware(testKey)(next)
 
 	reqBody := []byte("data")
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(reqBody))

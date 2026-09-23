@@ -9,13 +9,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
-	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -112,7 +114,8 @@ func (s *Sender) SendMetricsJSON(ctx context.Context, body models.Metrics, hashK
 // отправляет их одним запросом: тело сжимается gzip, при непустом hashKey
 // добавляется подпись HashSHA256, а сам запрос повторяется при временных
 // ошибках. Возвращает ошибку, если сервер ответил статусом >= 400.
-func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics, hashKey string) error {
+func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics, hashKey string, pubKey *rsa.PublicKey) error {
+	var body []byte
 	bufGZip := bytes.NewBuffer(nil)
 	zw := gzip.NewWriter(bufGZip)
 
@@ -135,15 +138,28 @@ func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics,
 		return err
 	}
 
+	body = bufGZip.Bytes()
+
+	if pubKey != nil {
+		body, err = crypto.EncryptBodyWithKey(body, pubKey)
+		if err != nil {
+			return err
+		}
+	}
+
 	return retry.Do(ctx, retry.IsHTTPRetriable, func() error {
 		req := s.client.R().
 			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip").
-			SetBody(bufGZip.Bytes())
+			SetBody(body)
 
 		if hashKey != "" {
 			req.SetHeader("HashSHA256", sign)
+		}
+
+		if pubKey != nil {
+			req.SetHeader("X-Encrypted", "true")
 		}
 
 		resp, err := req.Post("/updates")

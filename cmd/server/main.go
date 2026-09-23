@@ -5,8 +5,10 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -23,6 +25,8 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/build_info"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
+	cryptomw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/crypto"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
@@ -48,7 +52,7 @@ func main() {
 
 	err := logger.InitializeLogger("info")
 	if err != nil {
-		logger.Log.Warn("Failed to initialize logger", zap.Error(err))
+		fmt.Printf("Failed to initialize logger: %v", zap.Error(err))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -64,6 +68,14 @@ func main() {
 		pinger = db
 	}
 
+	var privateKey *rsa.PrivateKey
+	if c.PrivateKey != "" {
+		privateKey, err = crypto.ReadPrivateKey(c.PrivateKey)
+		if err != nil {
+			logger.Log.Fatal("Can't get private key", zap.Error(err))
+		}
+	}
+
 	auditDoneCh := make(chan struct{})
 	auditService := sendtoaudit.NewAuditService(c.AuditFile, c.AuditURL)
 	go func() {
@@ -74,8 +86,9 @@ func main() {
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
+		r.Use(cryptomw.Middleware(privateKey))
 		r.Use(gzip.Middleware)
-		r.Use(hash.HashMiddleware(c.Key))
+		r.Use(hash.Middleware(c.Key))
 
 		r.Get("/", roothandler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {

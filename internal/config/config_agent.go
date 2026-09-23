@@ -16,6 +16,7 @@ type AgentConfig struct {
 	ReportSec int    // интервал отправки метрик на сервер, секунд
 	Key       string // ключ для подписи запросов (пусто — без подписи)
 	RateLimit int    // максимум одновременных исходящих запросов
+	CryptoKey string // публичный ключ для шифрования сообщений
 }
 
 // NewConfigAgent создаёт [AgentConfig] и регистрирует флаги командной
@@ -32,6 +33,7 @@ func NewConfigAgent() *AgentConfig {
 	flag.IntVar(&ac.ReportSec, "r", 10, "defined report interval duration")
 	flag.StringVar(&ac.Key, "k", "", "key for hash")
 	flag.IntVar(&ac.RateLimit, "l", 5, "rate limit for outcoming requests")
+	flag.StringVar(&ac.CryptoKey, "crypto-key", "", "public key for encrypt agent messages to server")
 
 	return ac
 }
@@ -75,5 +77,9 @@ func (ac *AgentConfig) ApplyEnv() {
 			v = 1
 		}
 		ac.RateLimit = v
+	}
+
+	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
+		ac.CryptoKey = envCryptoKey
 	}
 }

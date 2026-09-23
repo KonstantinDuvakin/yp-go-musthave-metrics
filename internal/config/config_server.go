@@ -16,6 +16,7 @@ type ServerConfig struct {
 	Key             string // ключ для проверки/подписи запросов
 	AuditFile       string // путь к файлу аудита (пусто — выключен)
 	AuditURL        string // URL для отправки аудита (пусто — выключен)
+	PrivateKey      string // приватный ключ для расшифровки сообщений от клиента
 }
 
 // NewConfigServer создаёт [ServerConfig] и регистрирует флаги командной
@@ -34,6 +35,7 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.Key, "k", "", "key for hash.")
 	flag.StringVar(&sc.AuditFile, "audit-file", "", "path to audit file.")
 	flag.StringVar(&sc.AuditURL, "audit-url", "", "url for audit.")
+	flag.StringVar(&sc.PrivateKey, "crypto-key", "", "private key for decrypt messages from agent")
 
 	return sc
 }
@@ -77,5 +79,9 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
 		sc.AuditURL = envAuditURL
+	}
+
+	if envPrivateKey := os.Getenv("CRYPTO_KEY"); envPrivateKey != "" {
+		sc.PrivateKey = envPrivateKey
 	}
 }
