@@ -13,7 +13,7 @@ import (
 
 func TestNewStorage_MemorySync(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	c := &config.ServerConfig{StoreInterval: 0, FileStoragePath: path, Restore: false}
+	c := &config.ServerConfig{StoreInterval: 0, StoreFile: path, Restore: false}
 
 	store, db, shutdown, err := NewStorage(context.Background(), c)
 	require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestNewStorage_MemorySync(t *testing.T) {
 
 func TestNewStorage_MemoryInterval(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	c := &config.ServerConfig{StoreInterval: 3600, FileStoragePath: path, Restore: false}
+	c := &config.ServerConfig{StoreInterval: 3600, StoreFile: path, Restore: false}
 
 	ctx, cancel := context.WithCancel(context.Background())
 

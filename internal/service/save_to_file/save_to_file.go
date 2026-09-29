@@ -23,18 +23,18 @@ func SaveToFile(ctx context.Context, c *config.ServerConfig, store storage.FileP
 	defer close(done)
 
 	if c.StoreInterval > 0 {
-		ticker := time.NewTicker(time.Duration(c.StoreInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(c.StoreInterval * float64(time.Second)))
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
-				if err := store.SaveMetricsToFile(c.FileStoragePath); err != nil {
+				if err := store.SaveMetricsToFile(c.StoreFile); err != nil {
 					logger.Log.Warn("Failed to save metrics to file", zap.Error(err))
 				}
 				return
 			case <-ticker.C:
-				if err := store.SaveMetricsToFile(c.FileStoragePath); err != nil {
+				if err := store.SaveMetricsToFile(c.StoreFile); err != nil {
 					logger.Log.Warn("Failed to save metrics to file", zap.Error(err))
 				}
 			}

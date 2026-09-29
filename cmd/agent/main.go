@@ -7,7 +7,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,13 +31,23 @@ var (
 func main() {
 	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
 
+	err := logger.InitializeLogger("info")
+	if err != nil {
+		log.Fatal("Failed to initialize logger: ", err)
+	}
+
 	c := config.NewConfigAgent()
+
+	if err = config.ParseFile(c); err != nil {
+		logger.Log.Fatal("Failed parse configuration file", zap.Error(err))
+	}
+
 	flag.Parse()
 	c.ApplyEnv()
 
-	err := logger.InitializeLogger("info")
+	err = c.Validate()
 	if err != nil {
-		fmt.Printf("Failed to initialize logger: %v", err)
+		logger.Log.Fatal("Error validate configuration", zap.Error(err))
 	}
 
 	store := agentstorage.NewAgentStorage()
@@ -52,8 +62,8 @@ func main() {
 		}
 	}
 
-	pollInterval := time.Duration(c.PollSec) * time.Second
-	reportInterval := time.Duration(c.ReportSec) * time.Second
+	pollInterval := time.Duration(c.PollInterval * float64(time.Second))
+	reportInterval := time.Duration(c.ReportInterval * float64(time.Second))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

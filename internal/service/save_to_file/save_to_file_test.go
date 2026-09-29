@@ -13,7 +13,7 @@ import (
 
 func TestSaveToFile_ZeroInterval(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	c := &config.ServerConfig{StoreInterval: 0, FileStoragePath: path}
+	c := &config.ServerConfig{StoreInterval: 0, StoreFile: path}
 
 	store := memstorage.NewMemStorage()
 	store.AddCounter("c", 1)
@@ -34,7 +34,7 @@ func TestSaveToFile_ZeroInterval(t *testing.T) {
 
 func TestSaveToFile_GracefulSaveOnCancel(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	c := &config.ServerConfig{StoreInterval: 3600, FileStoragePath: path}
+	c := &config.ServerConfig{StoreInterval: 3600, StoreFile: path}
 
 	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 42)
@@ -62,7 +62,7 @@ func TestSaveToFile_GracefulSaveOnCancel(t *testing.T) {
 
 func TestSaveToFile_TickerWritesPeriodically(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	c := &config.ServerConfig{StoreInterval: 1, FileStoragePath: path}
+	c := &config.ServerConfig{StoreInterval: 1, StoreFile: path}
 
 	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 99)
@@ -83,4 +83,30 @@ func TestSaveToFile_TickerWritesPeriodically(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("тикер не записал файл за отведённое время")
+}
+
+func TestSaveToFile_FractionalInterval(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "metrics.json")
+	c := &config.ServerConfig{StoreInterval: 0.5, StoreFile: path}
+
+	store := memstorage.NewMemStorage()
+	store.AddCounter("PollCount", 7)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go SaveToFile(ctx, c, store, done)
+
+	// Тикер 500мс должен записать файл раньше, чем через секунду: если дробная
+	// часть интервала теряется, получится либо паника NewTicker (0), либо 1с.
+	deadline := time.Now().Add(900 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			cancel()
+			<-done
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("тикер с интервалом 0.5с не записал файл за 900мс")
 }

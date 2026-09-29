@@ -8,7 +8,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"flag"
-	"fmt"
+	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -46,13 +46,23 @@ var (
 func main() {
 	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
 
+	err := logger.InitializeLogger("info")
+	if err != nil {
+		log.Fatal("Failed to initialize logger: ", err)
+	}
+
 	c := config.NewConfigServer()
+
+	if err = config.ParseFile(c); err != nil {
+		logger.Log.Fatal("Failed parse configuration file", zap.Error(err))
+	}
+
 	flag.Parse()
 	c.ApplyEnv()
 
-	err := logger.InitializeLogger("info")
+	err = c.Validate()
 	if err != nil {
-		fmt.Printf("Failed to initialize logger: %v", zap.Error(err))
+		logger.Log.Fatal("Error validate configuration", zap.Error(err))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -69,8 +79,8 @@ func main() {
 	}
 
 	var privateKey *rsa.PrivateKey
-	if c.PrivateKey != "" {
-		privateKey, err = crypto.ReadPrivateKey(c.PrivateKey)
+	if c.CryptoKey != "" {
+		privateKey, err = crypto.ReadPrivateKey(c.CryptoKey)
 		if err != nil {
 			logger.Log.Fatal("Can't get private key", zap.Error(err))
 		}
