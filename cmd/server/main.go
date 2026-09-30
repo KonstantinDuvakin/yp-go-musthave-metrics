@@ -65,7 +65,7 @@ func main() {
 		logger.Log.Fatal("Error validate configuration", zap.Error(err))
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	store, db, shutdown, err := serverstorage.NewStorage(ctx, c)

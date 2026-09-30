@@ -14,6 +14,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// closeTimeout ограничивает время, которое агент при остановке ждёт досылки
+// оставшихся метрик на сервер. По его истечении незавершённые запросы
+// прерываются, а неотправленные данные теряются.
+const closeTimeout = 5 * time.Second
+
 // Agent связывает хранилище собранных метрик и отправитель на сервер.
 type Agent struct {
 	storage *agentstorage.AgentStorage
@@ -28,12 +33,18 @@ func New(storage *agentstorage.AgentStorage, sender *sender.Sender) *Agent {
 	}
 }
 
-// Run запускает рабочие циклы агента и блокируется до отмены ctx.
+// Run запускает рабочие циклы агента и блокируется до отмены ctx и
+// завершения отправки оставшихся данных.
 //
 // Метрики рантайма и системы опрашиваются с интервалом poll, накопленный
 // пакет отправляется на сервер с интервалом report. Отправку выполняют
 // limit параллельных воркеров; hashKey, если не пуст, используется для
-// подписи запросов. По отмене ctx все горутины корректно завершаются.
+// подписи запросов, pubKey, если не nil, — для шифрования тела.
+//
+// По отмене ctx опрос прекращается, в очередь ставится финальный снимок
+// метрик, а воркеры досылают все поставленные в очередь пакеты. Отправка
+// при остановке не зависит от ctx и ограничена closeTimeout: по его истечении
+// незавершённые запросы прерываются и Run возвращает управление.
 func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey string, limit int, pubKey *rsa.PublicKey) {
 	pollTicker := time.NewTicker(poll)
 	defer pollTicker.Stop()
@@ -43,6 +54,10 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 
 	reportTicker := time.NewTicker(report)
 	defer reportTicker.Stop()
+
+	innerCtx, cancel := context.WithCancel(context.Background())
+
+	cls := make(chan struct{})
 
 	var wg sync.WaitGroup
 
@@ -54,7 +69,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				err := a.sender.SendMetricsBatch(ctx, job, hashKey, pubKey)
+				err := a.sender.SendMetricsBatch(innerCtx, job, hashKey, pubKey)
 				if err != nil {
 					logger.Log.Error("Couldn't sent metric\nError: \n", zap.Error(err))
 				}
@@ -68,7 +83,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-cls:
 				return
 			case <-pollTicker.C:
 				for name, value := range collector.Collector() {
@@ -85,7 +100,7 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-cls:
 				return
 			case <-gopsPollTicker.C:
 				for name, value := range collector.GopsCollector() {
@@ -100,46 +115,52 @@ func (a *Agent) Run(ctx context.Context, poll, report time.Duration, hashKey str
 		defer wg.Done()
 		defer close(jobs)
 
+		sendFinal := func() {
+			mb := a.storage.CollectMetrics()
+			if mb == nil {
+				return
+			}
+			select {
+			case jobs <- mb:
+			case <-innerCtx.Done():
+			}
+		}
+
 		for {
 			select {
-			case <-ctx.Done():
+			case <-cls:
+				sendFinal()
 				return
 			case <-reportTicker.C:
-				gauges, counters := a.storage.Snapshot()
-				metricsBatch := make([]models.Metrics, 0, len(gauges)+len(counters))
+				metricsBatch := a.storage.CollectMetrics()
 
-				for name, value := range gauges {
-					gaugeMetric := models.Metrics{
-						ID:    name,
-						MType: models.Gauge,
-						Value: &value,
-					}
-
-					metricsBatch = append(metricsBatch, gaugeMetric)
-				}
-
-				for name, value := range counters {
-					counterMetric := models.Metrics{
-						ID:    name,
-						MType: models.Counter,
-						Delta: &value,
-					}
-
-					metricsBatch = append(metricsBatch, counterMetric)
-				}
-
-				if len(metricsBatch) == 0 {
+				if metricsBatch == nil {
 					continue
 				}
 
 				select {
 				case jobs <- metricsBatch:
-				case <-ctx.Done():
+				case <-cls:
+					sendFinal()
 					return
 				}
 			}
 		}
 	}()
 
-	wg.Wait()
+	wgChan := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(wgChan)
+	}()
+
+	<-ctx.Done()
+	close(cls)
+
+	select {
+	case <-time.After(closeTimeout):
+		cancel()
+	case <-wgChan:
+		cancel()
+	}
 }

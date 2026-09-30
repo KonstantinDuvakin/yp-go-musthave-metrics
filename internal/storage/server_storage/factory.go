@@ -63,9 +63,10 @@ func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.Metri
 		store = syncStore
 		shutdown = syncStore.Close
 	} else {
+		cls := make(chan struct{})
 		done := make(chan struct{})
-		go savetofile.SaveToFile(ctx, config, base, done)
-		shutdown = func() { <-done }
+		go savetofile.SaveToFile(config, base, cls, done)
+		shutdown = func() { close(cls); <-done }
 	}
 
 	return store, nil, shutdown, nil

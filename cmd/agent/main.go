@@ -65,7 +65,7 @@ func main() {
 	pollInterval := time.Duration(c.PollInterval * float64(time.Second))
 	reportInterval := time.Duration(c.ReportInterval * float64(time.Second))
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	agent.Run(ctx, pollInterval, reportInterval, c.Key, c.RateLimit, pubKey)

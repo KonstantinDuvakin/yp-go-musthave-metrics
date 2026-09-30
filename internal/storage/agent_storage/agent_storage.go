@@ -7,6 +7,7 @@ import (
 	"maps"
 	"sync"
 
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 )
 
@@ -49,4 +50,40 @@ func (as *AgentStorage) Snapshot() (g storage.GaugeMap, c storage.CounterMap) {
 	g = maps.Clone(as.Gauge)
 	c = maps.Clone(as.Counter)
 	return g, c
+}
+
+// CollectMetrics собирает текущие метрики хранилища в пакет для отправки
+// на сервер. Gauge-метрики передаются в поле Value, counter-метрики — в
+// поле Delta. Данные берутся из [AgentStorage.Snapshot], поэтому пакет
+// не зависит от последующих изменений хранилища. Порядок метрик в пакете
+// не определён. Для пустого хранилища возвращает nil.
+func (as *AgentStorage) CollectMetrics() []models.Metrics {
+	gauges, counters := as.Snapshot()
+	metricsBatch := make([]models.Metrics, 0, len(gauges)+len(counters))
+
+	for name, value := range gauges {
+		gaugeMetric := models.Metrics{
+			ID:    name,
+			MType: models.Gauge,
+			Value: &value,
+		}
+
+		metricsBatch = append(metricsBatch, gaugeMetric)
+	}
+
+	for name, value := range counters {
+		counterMetric := models.Metrics{
+			ID:    name,
+			MType: models.Counter,
+			Delta: &value,
+		}
+
+		metricsBatch = append(metricsBatch, counterMetric)
+	}
+
+	if len(metricsBatch) == 0 {
+		return nil
+	}
+
+	return metricsBatch
 }

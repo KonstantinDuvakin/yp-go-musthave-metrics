@@ -1,7 +1,6 @@
 package savetofile
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,8 +17,9 @@ func TestSaveToFile_ZeroInterval(t *testing.T) {
 	store := memstorage.NewMemStorage()
 	store.AddCounter("c", 1)
 
+	cls := make(chan struct{})
 	done := make(chan struct{})
-	SaveToFile(context.Background(), c, store, done)
+	SaveToFile(c, store, cls, done)
 
 	select {
 	case <-done:
@@ -39,11 +39,11 @@ func TestSaveToFile_GracefulSaveOnCancel(t *testing.T) {
 	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 42)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	cls := make(chan struct{})
 	done := make(chan struct{})
-	go SaveToFile(ctx, c, store, done)
+	go SaveToFile(c, store, cls, done)
 
-	cancel()
+	close(cls)
 
 	select {
 	case <-done:
@@ -67,17 +67,18 @@ func TestSaveToFile_TickerWritesPeriodically(t *testing.T) {
 	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 99)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	cls := make(chan struct{})
 	done := make(chan struct{})
-	go SaveToFile(ctx, c, store, done)
+	go SaveToFile(c, store, cls, done)
+	defer func() {
+		close(cls)
+		<-done
+	}()
 
 	// Ждём, пока тикер (1с) создаст файл, поллим до 3с, чтобы не зависеть от точного тайминга.
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(path); err == nil {
-			cancel()
-			<-done
 			return // файл появился — тикер сработал
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -92,18 +93,19 @@ func TestSaveToFile_FractionalInterval(t *testing.T) {
 	store := memstorage.NewMemStorage()
 	store.AddCounter("PollCount", 7)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	cls := make(chan struct{})
 	done := make(chan struct{})
-	go SaveToFile(ctx, c, store, done)
+	go SaveToFile(c, store, cls, done)
+	defer func() {
+		close(cls)
+		<-done
+	}()
 
 	// Тикер 500мс должен записать файл раньше, чем через секунду: если дробная
 	// часть интервала теряется, получится либо паника NewTicker (0), либо 1с.
 	deadline := time.Now().Add(900 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(path); err == nil {
-			cancel()
-			<-done
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

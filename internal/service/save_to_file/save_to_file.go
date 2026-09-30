@@ -4,7 +4,6 @@
 package savetofile
 
 import (
-	"context"
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
@@ -14,12 +13,12 @@ import (
 )
 
 // SaveToFile периодически сохраняет метрики store в файл с интервалом
-// c.StoreInterval секунд, пока не будет отменён ctx.
+// c.StoreInterval секунд, пока не будет закрыт канал cls.
 //
-// Предназначен для запуска в отдельной горутине. При отмене ctx выполняет
+// Предназначен для запуска в отдельной горутине. При закрытии cls выполняет
 // финальное сохранение и закрывает канал done, сигнализируя о завершении.
 // При c.StoreInterval <= 0 сразу закрывает done и ничего не делает.
-func SaveToFile(ctx context.Context, c *config.ServerConfig, store storage.FilePersistentStorage, done chan<- struct{}) {
+func SaveToFile(c *config.ServerConfig, store storage.FilePersistentStorage, cls <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 
 	if c.StoreInterval > 0 {
@@ -28,7 +27,7 @@ func SaveToFile(ctx context.Context, c *config.ServerConfig, store storage.FileP
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-cls:
 				if err := store.SaveMetricsToFile(c.StoreFile); err != nil {
 					logger.Log.Warn("Failed to save metrics to file", zap.Error(err))
 				}
