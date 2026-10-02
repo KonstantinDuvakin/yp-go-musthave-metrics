@@ -86,17 +86,16 @@ func main() {
 		}
 	}
 
-	auditDoneCh := make(chan struct{})
 	auditService := sendtoaudit.NewAuditService(c.AuditFile, c.AuditURL)
-	go func() {
-		auditService.Start()
-		close(auditDoneCh)
-	}()
+	auditService.Start()
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
-		r.Use(cryptomw.Middleware(privateKey))
+		// Расшифровка нужна, только если сервер запущен с приватным ключом.
+		if privateKey != nil {
+			r.Use(cryptomw.Middleware(privateKey))
+		}
 		r.Use(gzip.Middleware)
 		r.Use(hash.Middleware(c.Key))
 
@@ -138,5 +137,4 @@ func main() {
 
 	auditService.Stop()
 	shutdown()
-	<-auditDoneCh
 }

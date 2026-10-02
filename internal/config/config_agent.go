@@ -45,15 +45,22 @@ func NewConfigAgent() *AgentConfig {
 	return ac
 }
 
-// ApplyEnv переопределяет значения конфигурации переменными окружения,
-// если они заданы: ADDRESS, POLL_INTERVAL, REPORT_INTERVAL, KEY,
-// RATE_LIMIT, CONFIG, CRYPTO_KEY. Переменные имеют приоритет над флагами командной строки.
+// ApplyEnv переопределяет значения конфигурации переменными окружения
+// ADDRESS, POLL_INTERVAL, REPORT_INTERVAL, KEY, RATE_LIMIT, CONFIG,
+// CRYPTO_KEY. Переменные имеют приоритет над флагами командной строки.
+//
+// Учитываются все заданные переменные, в том числе с пустым значением:
+// например, KEY="" отключает подпись, даже если ключ задан флагом.
+// Невалидные числовые значения не применяются: поле сохраняет прежнее
+// значение, а в лог пишется предупреждение. POLL_INTERVAL и
+// REPORT_INTERVAL должны быть больше нуля; RATE_LIMIT меньше единицы
+// заменяется на 1.
 func (ac *AgentConfig) ApplyEnv() {
-	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+	if envAddress, ok := os.LookupEnv("ADDRESS"); ok {
 		ac.Address = envAddress
 	}
 
-	if envPollInterval := os.Getenv("POLL_INTERVAL"); envPollInterval != "" {
+	if envPollInterval, ok := os.LookupEnv("POLL_INTERVAL"); ok {
 		if v, err := strconv.ParseFloat(envPollInterval, 64); err == nil && v > 0 {
 			ac.PollInterval = v
 		} else {
@@ -61,7 +68,7 @@ func (ac *AgentConfig) ApplyEnv() {
 		}
 	}
 
-	if envReportInterval := os.Getenv("REPORT_INTERVAL"); envReportInterval != "" {
+	if envReportInterval, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
 		if v, err := strconv.ParseFloat(envReportInterval, 64); err == nil && v > 0 {
 			ac.ReportInterval = v
 		} else {
@@ -69,27 +76,27 @@ func (ac *AgentConfig) ApplyEnv() {
 		}
 	}
 
-	if envKey := os.Getenv("KEY"); envKey != "" {
+	if envKey, ok := os.LookupEnv("KEY"); ok {
 		ac.Key = envKey
 	}
 
-	if envRateLimit := os.Getenv("RATE_LIMIT"); envRateLimit != "" {
+	if envRateLimit, ok := os.LookupEnv("RATE_LIMIT"); ok {
 		v, err := strconv.Atoi(envRateLimit)
 		if err != nil {
-			logger.Log.Warn("Invalid RATE_LIMIT value: ", zap.String("RATE_LIMIT", envRateLimit))
+			logger.Log.Warn("Invalid RATE_LIMIT value", zap.String("RATE_LIMIT", envRateLimit))
+		} else {
+			if v <= 0 {
+				v = 1
+			}
+			ac.RateLimit = v
 		}
-
-		if v <= 0 {
-			v = 1
-		}
-		ac.RateLimit = v
 	}
 
-	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
+	if envCryptoKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
 		ac.CryptoKey = envCryptoKey
 	}
 
-	if envConfigPath := os.Getenv("CONFIG"); envConfigPath != "" {
+	if envConfigPath, ok := os.LookupEnv("CONFIG"); ok {
 		ac.ConfigPath = envConfigPath
 	}
 }

@@ -93,3 +93,105 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestServerConfig_ApplyEnv(t *testing.T) {
+	envNames := []string{
+		"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "CONFIG", "RESTORE",
+		"DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL", "CRYPTO_KEY",
+	}
+
+	base := func() ServerConfig {
+		return ServerConfig{
+			Address:       "localhost:8080",
+			StoreInterval: 300,
+			StoreFile:     "metrics_log.txt",
+			ConfigPath:    "/flag/config.json",
+			Restore:       true,
+			DB:            "postgres://flag",
+			Key:           "flag-key",
+			AuditFile:     "/flag/audit.log",
+			AuditURL:      "http://flag/audit",
+			CryptoKey:     "/flag/private.pem",
+		}
+	}
+
+	tests := []struct {
+		name string
+		env  map[string]string
+		want func(c *ServerConfig)
+	}{
+		{
+			name: "no env keeps values",
+			env:  map[string]string{},
+			want: func(c *ServerConfig) {},
+		},
+		{
+			name: "valid values override",
+			env: map[string]string{
+				"ADDRESS":           "0.0.0.0:9090",
+				"STORE_INTERVAL":    "1.5",
+				"FILE_STORAGE_PATH": "/env/metrics.json",
+				"CONFIG":            "/env/config.json",
+				"RESTORE":           "false",
+				"DATABASE_DSN":      "postgres://env",
+				"KEY":               "env-key",
+				"AUDIT_FILE":        "/env/audit.log",
+				"AUDIT_URL":         "http://env/audit",
+				"CRYPTO_KEY":        "/env/private.pem",
+			},
+			want: func(c *ServerConfig) {
+				c.Address = "0.0.0.0:9090"
+				c.StoreInterval = 1.5
+				c.StoreFile = "/env/metrics.json"
+				c.ConfigPath = "/env/config.json"
+				c.Restore = false
+				c.DB = "postgres://env"
+				c.Key = "env-key"
+				c.AuditFile = "/env/audit.log"
+				c.AuditURL = "http://env/audit"
+				c.CryptoKey = "/env/private.pem"
+			},
+		},
+		{
+			name: "zero STORE_INTERVAL enables sync mode",
+			env:  map[string]string{"STORE_INTERVAL": "0"},
+			want: func(c *ServerConfig) { c.StoreInterval = 0 },
+		},
+		{
+			name: "empty DATABASE_DSN switches to memory",
+			env:  map[string]string{"DATABASE_DSN": ""},
+			want: func(c *ServerConfig) { c.DB = "" },
+		},
+		{
+			name: "invalid STORE_INTERVAL keeps previous value",
+			env:  map[string]string{"STORE_INTERVAL": "abc"},
+			want: func(c *ServerConfig) {},
+		},
+		{
+			name: "negative STORE_INTERVAL keeps previous value",
+			env:  map[string]string{"STORE_INTERVAL": "-1"},
+			want: func(c *ServerConfig) {},
+		},
+		{
+			name: "invalid RESTORE keeps previous value",
+			env:  map[string]string{"RESTORE": "maybe"},
+			want: func(c *ServerConfig) {},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnv(t, envNames...)
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			got := base()
+			got.ApplyEnv()
+
+			want := base()
+			tt.want(&want)
+			assert.Equal(t, want, got)
+		})
+	}
+}

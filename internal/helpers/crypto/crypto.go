@@ -11,10 +11,10 @@
 // занимает 12 байт, остаток — шифротекст с 16-байтовым тегом целостности.
 //
 // Ключи хранятся в PEM-файлах в формате PKCS#1 ("RSA PUBLIC KEY" и
-// "RSA PRIVATE KEY"), например:
+// "RSA PRIVATE KEY"). Пару ключей в нужном формате генерирует команда
+// keygen из корня модуля:
 //
-//	openssl genrsa -traditional -out private.pem 2048
-//	openssl rsa -in private.pem -RSAPublicKey_out -out public.pem
+//	go run ./cmd/keygen
 package crypto
 
 import (

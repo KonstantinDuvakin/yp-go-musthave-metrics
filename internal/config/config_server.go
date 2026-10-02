@@ -48,16 +48,22 @@ func NewConfigServer() *ServerConfig {
 	return sc
 }
 
-// ApplyEnv переопределяет значения конфигурации переменными окружения,
-// если они заданы: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE,
-// DATABASE_DSN, KEY, AUDIT_FILE, AUDIT_URL, CONFIG, CRYPTO_KEY. Переменные имеют приоритет
+// ApplyEnv переопределяет значения конфигурации переменными окружения
+// ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY,
+// AUDIT_FILE, AUDIT_URL, CONFIG, CRYPTO_KEY. Переменные имеют приоритет
 // над флагами командной строки.
+//
+// Учитываются все заданные переменные, в том числе с пустым значением:
+// например, DATABASE_DSN="" переключает сервер на хранение в памяти, даже
+// если DSN задан флагом. Невалидные значения STORE_INTERVAL (не число или
+// меньше нуля) и RESTORE (не bool) не применяются: поле сохраняет прежнее
+// значение.
 func (sc *ServerConfig) ApplyEnv() {
-	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+	if envAddress, ok := os.LookupEnv("ADDRESS"); ok {
 		sc.Address = envAddress
 	}
 
-	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
+	if envStoreInterval, ok := os.LookupEnv("STORE_INTERVAL"); ok {
 		if interval, err := strconv.ParseFloat(envStoreInterval, 64); err == nil && interval >= 0 {
 			sc.StoreInterval = interval
 		} else {
@@ -65,37 +71,37 @@ func (sc *ServerConfig) ApplyEnv() {
 		}
 	}
 
-	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
+	if envFileStoragePath, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		sc.StoreFile = envFileStoragePath
 	}
 
-	if envConfigPath := os.Getenv("CONFIG"); envConfigPath != "" {
+	if envConfigPath, ok := os.LookupEnv("CONFIG"); ok {
 		sc.ConfigPath = envConfigPath
 	}
 
-	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
+	if envRestore, ok := os.LookupEnv("RESTORE"); ok {
 		if restore, err := strconv.ParseBool(envRestore); err == nil {
 			sc.Restore = restore
 		}
 	}
 
-	if envDatabaseAddress := os.Getenv("DATABASE_DSN"); envDatabaseAddress != "" {
+	if envDatabaseAddress, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		sc.DB = envDatabaseAddress
 	}
 
-	if envKey := os.Getenv("KEY"); envKey != "" {
+	if envKey, ok := os.LookupEnv("KEY"); ok {
 		sc.Key = envKey
 	}
 
-	if envAuditFile := os.Getenv("AUDIT_FILE"); envAuditFile != "" {
+	if envAuditFile, ok := os.LookupEnv("AUDIT_FILE"); ok {
 		sc.AuditFile = envAuditFile
 	}
 
-	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
+	if envAuditURL, ok := os.LookupEnv("AUDIT_URL"); ok {
 		sc.AuditURL = envAuditURL
 	}
 
-	if envPrivateKey := os.Getenv("CRYPTO_KEY"); envPrivateKey != "" {
+	if envPrivateKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
 		sc.CryptoKey = envPrivateKey
 	}
 }

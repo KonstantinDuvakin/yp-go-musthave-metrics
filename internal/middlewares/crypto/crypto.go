@@ -22,9 +22,13 @@ import (
 // Middleware возвращает middleware, расшифровывающее тело запроса ключом
 // privateKey.
 //
+// privateKey не должен быть nil: middleware подключается к роутеру только
+// тогда, когда сервер запущен с ключом. Без ключа зашифрованный запрос
+// проходит дальше как есть и отклоняется на этапе распаковки или разбора
+// тела.
+//
 // Расшифровываются только запросы с заголовком X-Encrypted: true; остальные
 // пропускаются без изменений. Для зашифрованного запроса middleware отвечает:
-//   - 400, если privateKey равен nil (сервер запущен без ключа);
 //   - 413, если тело больше 1 МБ;
 //   - 400, если тело не удалось прочитать или расшифровать.
 //
@@ -35,12 +39,6 @@ func Middleware(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
 			encryptHeader := r.Header.Get("X-Encrypted")
 
 			shouldDecrypt := encryptHeader == "true"
-
-			if privateKey == nil && shouldDecrypt {
-				logger.Log.Error("Private key not provided")
-				http.Error(rw, "Encryption not supported", http.StatusBadRequest)
-				return
-			}
 
 			if shouldDecrypt {
 				body, err := io.ReadAll(http.MaxBytesReader(rw, r.Body, 1<<20))

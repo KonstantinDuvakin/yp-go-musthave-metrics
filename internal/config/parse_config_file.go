@@ -23,7 +23,7 @@ func ParseFile(c json.Unmarshaler) error {
 		return fmt.Errorf("error parse config flag: %w", err)
 	}
 
-	if envConfPath := os.Getenv("CONFIG"); envConfPath != "" {
+	if envConfPath, ok := os.LookupEnv("CONFIG"); ok {
 		configPath = envConfPath
 	}
 

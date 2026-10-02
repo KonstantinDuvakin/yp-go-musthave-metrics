@@ -28,6 +28,11 @@ var (
 	buildCommit  = buildinfo.NA
 )
 
+// closeTimeout ограничивает время, которое агент при остановке ждёт досылки
+// оставшихся метрик на сервер. По его истечении незавершённые запросы
+// прерываются, а неотправленные данные теряются.
+const closeTimeout = 5 * time.Second
+
 func main() {
 	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
 
@@ -68,5 +73,29 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
-	agent.Run(ctx, pollInterval, reportInterval, c.Key, c.RateLimit, pubKey)
+	// sendCtx не зависит от сигналов: после остановки сбора агент досылает
+	// оставшиеся метрики, а прерывает отправку только таймаут ниже.
+	sendCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- agent.Run(ctx, sendCtx, pollInterval, reportInterval, c.Key, c.RateLimit, pubKey)
+	}()
+
+	<-ctx.Done()
+	logger.Log.Info("Shutting down agent")
+
+	// Ждём досылки не дольше closeTimeout, затем прерываем запросы и ждём,
+	// пока воркеры разберут остаток очереди с уже отменённым контекстом.
+	select {
+	case err = <-errCh:
+	case <-time.After(closeTimeout):
+		cancel()
+		err = <-errCh
+	}
+
+	if err != nil {
+		logger.Log.Error("Agent stopped with error", zap.Error(err))
+	}
 }

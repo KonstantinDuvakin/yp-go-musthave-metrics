@@ -96,21 +96,6 @@ func TestMiddleware(t *testing.T) {
 			wantCalled: true,
 		},
 		{
-			name:       "passes plain body through without key",
-			key:        nil,
-			body:       plain,
-			wantCode:   http.StatusOK,
-			wantBody:   plain,
-			wantCalled: true,
-		},
-		{
-			name:      "encrypted body without server key",
-			key:       nil,
-			body:      encrypted,
-			encrypted: true,
-			wantCode:  http.StatusBadRequest,
-		},
-		{
 			name:      "body shorter than RSA block",
 			key:       key,
 			body:      make([]byte, 10),
