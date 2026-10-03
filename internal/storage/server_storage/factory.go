@@ -53,19 +53,20 @@ func NewStorage(ctx context.Context, config *config.ServerConfig) (storage.Metri
 	var shutdown = func() {}
 
 	if config.Restore {
-		if err := base.RestoreFromFile(config.FileStoragePath); err != nil {
+		if err := base.RestoreFromFile(config.StoreFile); err != nil {
 			logger.Log.Warn("Failed to restore data from file", zap.Error(err))
 		}
 	}
 
 	if config.StoreInterval == 0 {
-		syncStore := syncmemstorage.NewSyncMemStorage(base, config.FileStoragePath)
+		syncStore := syncmemstorage.NewSyncMemStorage(base, config.StoreFile)
 		store = syncStore
 		shutdown = syncStore.Close
 	} else {
+		cls := make(chan struct{})
 		done := make(chan struct{})
-		go savetofile.SaveToFile(ctx, config, base, done)
-		shutdown = func() { <-done }
+		go savetofile.SaveToFile(config, base, cls, done)
+		shutdown = func() { close(cls); <-done }
 	}
 
 	return store, nil, shutdown, nil

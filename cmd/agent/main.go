@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"flag"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,7 +16,10 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/agent/sender"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/config"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/build_info"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/agent_storage"
+	"go.uber.org/zap"
 )
 
 var (
@@ -23,22 +28,74 @@ var (
 	buildCommit  = buildinfo.NA
 )
 
+// closeTimeout ограничивает время, которое агент при остановке ждёт досылки
+// оставшихся метрик на сервер. По его истечении незавершённые запросы
+// прерываются, а неотправленные данные теряются.
+const closeTimeout = 5 * time.Second
+
 func main() {
 	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
 
+	err := logger.InitializeLogger("info")
+	if err != nil {
+		log.Fatal("Failed to initialize logger: ", err)
+	}
+
 	c := config.NewConfigAgent()
+
+	if err = config.ParseFile(c); err != nil {
+		logger.Log.Fatal("Failed parse configuration file", zap.Error(err))
+	}
+
 	flag.Parse()
 	c.ApplyEnv()
+
+	err = c.Validate()
+	if err != nil {
+		logger.Log.Fatal("Error validate configuration", zap.Error(err))
+	}
 
 	store := agentstorage.NewAgentStorage()
 	send := sender.NewSender(c.Address)
 	agent := New(store, send)
 
-	pollInterval := time.Duration(c.PollSec) * time.Second
-	reportInterval := time.Duration(c.ReportSec) * time.Second
+	var pubKey *rsa.PublicKey
+	if c.CryptoKey != "" {
+		pubKey, err = crypto.ReadPublicKey(c.CryptoKey)
+		if err != nil {
+			logger.Log.Fatal("Can't get public key", zap.Error(err))
+		}
+	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	pollInterval := time.Duration(c.PollInterval * float64(time.Second))
+	reportInterval := time.Duration(c.ReportInterval * float64(time.Second))
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
-	agent.Run(ctx, pollInterval, reportInterval, c.Key, c.RateLimit)
+	// sendCtx не зависит от сигналов: после остановки сбора агент досылает
+	// оставшиеся метрики, а прерывает отправку только таймаут ниже.
+	sendCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- agent.Run(ctx, sendCtx, pollInterval, reportInterval, c.Key, c.RateLimit, pubKey)
+	}()
+
+	<-ctx.Done()
+	logger.Log.Info("Shutting down agent")
+
+	// Ждём досылки не дольше closeTimeout, затем прерываем запросы и ждём,
+	// пока воркеры разберут остаток очереди с уже отменённым контекстом.
+	select {
+	case err = <-errCh:
+	case <-time.After(closeTimeout):
+		cancel()
+		err = <-errCh
+	}
+
+	if err != nil {
+		logger.Log.Error("Agent stopped with error", zap.Error(err))
+	}
 }

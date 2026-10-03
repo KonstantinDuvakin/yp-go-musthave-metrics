@@ -5,8 +5,10 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"flag"
+	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -23,6 +25,8 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/build_info"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
+	cryptomw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/crypto"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
@@ -42,16 +46,26 @@ var (
 func main() {
 	buildinfo.PrintBuildInfo(os.Stdout, buildVersion, buildDate, buildCommit)
 
+	err := logger.InitializeLogger("info")
+	if err != nil {
+		log.Fatal("Failed to initialize logger: ", err)
+	}
+
 	c := config.NewConfigServer()
+
+	if err = config.ParseFile(c); err != nil {
+		logger.Log.Fatal("Failed parse configuration file", zap.Error(err))
+	}
+
 	flag.Parse()
 	c.ApplyEnv()
 
-	err := logger.InitializeLogger("info")
+	err = c.Validate()
 	if err != nil {
-		logger.Log.Warn("Failed to initialize logger", zap.Error(err))
+		logger.Log.Fatal("Error validate configuration", zap.Error(err))
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	store, db, shutdown, err := serverstorage.NewStorage(ctx, c)
@@ -64,18 +78,26 @@ func main() {
 		pinger = db
 	}
 
-	auditDoneCh := make(chan struct{})
+	var privateKey *rsa.PrivateKey
+	if c.CryptoKey != "" {
+		privateKey, err = crypto.ReadPrivateKey(c.CryptoKey)
+		if err != nil {
+			logger.Log.Fatal("Can't get private key", zap.Error(err))
+		}
+	}
+
 	auditService := sendtoaudit.NewAuditService(c.AuditFile, c.AuditURL)
-	go func() {
-		auditService.Start()
-		close(auditDoneCh)
-	}()
+	auditService.Start()
 
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
+		// Расшифровка нужна, только если сервер запущен с приватным ключом.
+		if privateKey != nil {
+			r.Use(cryptomw.Middleware(privateKey))
+		}
 		r.Use(gzip.Middleware)
-		r.Use(hash.HashMiddleware(c.Key))
+		r.Use(hash.Middleware(c.Key))
 
 		r.Get("/", roothandler.RootHandler(store))
 		r.Route("/update", func(r chi.Router) {
@@ -115,5 +137,4 @@ func main() {
 
 	auditService.Stop()
 	shutdown()
-	<-auditDoneCh
 }

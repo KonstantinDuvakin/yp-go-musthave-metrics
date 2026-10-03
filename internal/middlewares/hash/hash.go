@@ -47,14 +47,14 @@ func (hrw *hashResponseWriter) Close() {
 	hrwPool.Put(hrw)
 }
 
-// HashMiddleware возвращает middleware, проверяющее и добавляющее подпись
+// Middleware возвращает middleware, проверяющее и добавляющее подпись
 // HMAC-SHA256 с ключом key.
 //
 // При пустом key middleware отключено и пропускает запросы без изменений.
 // Иначе: если в запросе есть заголовок HashSHA256, тело проверяется на
 // соответствие подписи (при несовпадении — 400); ответ подписывается тем
 // же ключом и подпись добавляется в заголовок HashSHA256.
-func HashMiddleware(key string) func(http.Handler) http.Handler {
+func Middleware(key string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			if key == "" {

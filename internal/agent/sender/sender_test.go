@@ -1,8 +1,11 @@
 package sender
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +16,7 @@ import (
 
 	updatehandler "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_handler"
 	updatemetricjson "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/handlers/update_metric_json"
+	cryptohelper "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	gzipmw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
@@ -251,7 +255,7 @@ func TestSendMetricsBatch(t *testing.T) {
 	defer srv.Close()
 
 	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
-	if err := s.SendMetricsBatch(context.Background(), batch, ""); err != nil {
+	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
 }
@@ -289,7 +293,57 @@ func TestSendMetricsBatch_WithKey(t *testing.T) {
 	defer srv.Close()
 
 	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
-	if err := s.SendMetricsBatch(context.Background(), batch, key); err != nil {
+	if err := s.SendMetricsBatch(context.Background(), batch, key, nil); err != nil {
+		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
+	}
+}
+
+// С публичным ключом тело шифруется поверх gzip, добавляется заголовок
+// X-Encrypted, а после расшифровки приватным ключом получается исходный gzip.
+func TestSendMetricsBatch_Encrypted(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("генерация ключа: %v", err)
+	}
+
+	gv := 3.0
+	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Encrypted"); got != "true" {
+			t.Errorf("X-Encrypted = %q, ожидалось \"true\"", got)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("чтение тела: %v", err)
+		}
+
+		decrypted, err := cryptohelper.DecryptBodyWithKey(body, privateKey)
+		if err != nil {
+			t.Fatalf("расшифровка тела: %v", err)
+		}
+
+		zr, err := gzip.NewReader(bytes.NewReader(decrypted))
+		if err != nil {
+			t.Fatalf("расшифрованное тело не является валидным gzip: %v", err)
+		}
+		defer zr.Close()
+
+		var got []models.Metrics
+		if err := json.NewDecoder(zr).Decode(&got); err != nil {
+			t.Fatalf("декодирование JSON: %v", err)
+		}
+		if len(got) != 1 || got[0].ID != "Alloc" {
+			t.Errorf("получено %+v, ожидалась метрика Alloc", got)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	if err := s.SendMetricsBatch(context.Background(), batch, "", &privateKey.PublicKey); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
 }
@@ -304,7 +358,7 @@ func TestSendMetricsBatch_ErrorStatus(t *testing.T) {
 
 	gv := 1.0
 	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
-	if err := s.SendMetricsBatch(context.Background(), batch, ""); err == nil {
+	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err == nil {
 		t.Fatal("ожидалась ошибка при статусе 500, получили nil")
 	}
 }

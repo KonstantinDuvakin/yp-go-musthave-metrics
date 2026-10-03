@@ -9,16 +9,16 @@ import (
 	hashhelper "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 )
 
-// HashMiddleware подписывает ответ ключом и кладёт подпись в заголовок
+// Middleware подписывает ответ ключом и кладёт подпись в заголовок
 // HashSHA256. Клиент может проверить целостность тела тем же ключом.
-func ExampleHashMiddleware() {
+func ExampleMiddleware() {
 	key := "secret-key"
 
 	final := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
 
-	srv := httptest.NewServer(HashMiddleware(key)(final))
+	srv := httptest.NewServer(Middleware(key)(final))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL)

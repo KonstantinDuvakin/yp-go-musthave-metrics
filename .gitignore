@@ -25,3 +25,9 @@ vendor/
 .vscode
 
 metrics_log.txt
+
+# RSA keys
+*.pem
+
+# Local config files
+*_config.json
