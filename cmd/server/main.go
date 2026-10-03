@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -29,6 +30,7 @@ import (
 	cryptomw "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/crypto"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/gzip"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/hash"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/ipmw"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/send_to_audit"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage"
@@ -78,6 +80,14 @@ func main() {
 		pinger = db
 	}
 
+	var ipNet *net.IPNet
+	if c.TrustedSubnet != "" {
+		_, ipNet, err = net.ParseCIDR(c.TrustedSubnet)
+		if err != nil {
+			logger.Log.Fatal("Invalid trusted subnet", zap.Error(err))
+		}
+	}
+
 	var privateKey *rsa.PrivateKey
 	if c.CryptoKey != "" {
 		privateKey, err = crypto.ReadPrivateKey(c.CryptoKey)
@@ -92,6 +102,9 @@ func main() {
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
+		if ipNet != nil {
+			r.Use(ipmw.Middleware(ipNet))
+		}
 		// Расшифровка нужна, только если сервер запущен с приватным ключом.
 		if privateKey != nil {
 			r.Use(cryptomw.Middleware(privateKey))

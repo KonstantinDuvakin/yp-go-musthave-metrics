@@ -54,7 +54,8 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 			"store_interval": "500ms",
 			"store_file": "/tmp/metrics.db",
 			"database_dsn": "postgres://user@localhost/db",
-			"crypto_key": "/path/to/key.pem"
+			"crypto_key": "/path/to/key.pem",
+			"trusted_subnet": "192.168.1.0/24"
 		}`
 
 		require.NoError(t, json.Unmarshal([]byte(data), sc))
@@ -65,6 +66,7 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 		assert.Equal(t, "/tmp/metrics.db", sc.StoreFile)
 		assert.Equal(t, "postgres://user@localhost/db", sc.DB)
 		assert.Equal(t, "/path/to/key.pem", sc.CryptoKey)
+		assert.Equal(t, "192.168.1.0/24", sc.TrustedSubnet)
 	})
 
 	t.Run("missing fields keep defaults", func(t *testing.T) {
@@ -98,6 +100,7 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 	envNames := []string{
 		"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "CONFIG", "RESTORE",
 		"DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL", "CRYPTO_KEY",
+		"TRUSTED_SUBNET",
 	}
 
 	base := func() ServerConfig {
@@ -112,6 +115,7 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 			AuditFile:     "/flag/audit.log",
 			AuditURL:      "http://flag/audit",
 			CryptoKey:     "/flag/private.pem",
+			TrustedSubnet: "10.0.0.0/8",
 		}
 	}
 
@@ -138,6 +142,7 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 				"AUDIT_FILE":        "/env/audit.log",
 				"AUDIT_URL":         "http://env/audit",
 				"CRYPTO_KEY":        "/env/private.pem",
+				"TRUSTED_SUBNET":    "192.168.1.0/24",
 			},
 			want: func(c *ServerConfig) {
 				c.Address = "0.0.0.0:9090"
@@ -150,7 +155,13 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 				c.AuditFile = "/env/audit.log"
 				c.AuditURL = "http://env/audit"
 				c.CryptoKey = "/env/private.pem"
+				c.TrustedSubnet = "192.168.1.0/24"
 			},
+		},
+		{
+			name: "empty TRUSTED_SUBNET disables subnet check",
+			env:  map[string]string{"TRUSTED_SUBNET": ""},
+			want: func(c *ServerConfig) { c.TrustedSubnet = "" },
 		},
 		{
 			name: "zero STORE_INTERVAL enables sync mode",

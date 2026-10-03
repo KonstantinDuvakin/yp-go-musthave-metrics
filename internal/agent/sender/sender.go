@@ -12,13 +12,16 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/hash"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	"github.com/go-resty/resty/v2"
+	"go.uber.org/zap"
 )
 
 // Sender отправляет метрики на сервер сбора метрик.
@@ -34,11 +37,24 @@ type Sender struct {
 // baseURL — адрес сервера без схемы (например, "localhost:8080"); схема
 // http:// добавляется автоматически. Клиенту задаётся таймаут 2 секунды
 // и заголовок Content-Type: text/plain по умолчанию.
+//
+// Во все запросы добавляется заголовок X-Real-IP с IP-адресом агента,
+// с которого уходят запросы на baseURL (см. getLocalIP). Сервер сверяет
+// его с доверенной подсетью. Если адрес определить не удалось, пишется
+// предупреждение в лог и заголовок не выставляется.
 func NewSender(baseURL string) *Sender {
 	client := resty.New()
 	client.SetBaseURL("http://" + baseURL)
 	client.SetHeader("Content-Type", "text/plain")
 	client.SetTimeout(2 * time.Second)
+
+	ip, err := getLocalIP(baseURL)
+	if err != nil {
+		logger.Log.Warn("Couldn't get local IP", zap.Error(err))
+	} else {
+		client.SetHeader("X-Real-IP", ip.String())
+	}
+
 	return &Sender{
 		client: client,
 	}
@@ -182,4 +198,24 @@ func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics,
 // Возвращает строку вида /update/{metricType}/{name}/{value}.
 func URLBuilder(metricType, name, value string) string {
 	return fmt.Sprintf("/update/%s/%s/%s", metricType, name, value)
+}
+
+// getLocalIP возвращает локальный IP-адрес, с которого ОС отправляет
+// пакеты на serverAddr (host:port).
+//
+// UDP-«соединение» только выбирает маршрут и привязывает локальный адрес:
+// пакеты не отправляются, поэтому сервер может быть недоступен. При
+// нескольких сетевых интерфейсах возвращается адрес того, через который
+// идёт маршрут к серверу, то есть именно тот, что увидит сервер.
+func getLocalIP(serverAddr string) (net.IP, error) {
+	conn, err := net.Dial("udp", serverAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP, nil
 }
