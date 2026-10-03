@@ -23,6 +23,7 @@ type ServerConfig struct {
 	AuditFile     string  `json:"audit_file"`     // путь к файлу аудита (пусто — выключен)
 	AuditURL      string  `json:"audit_url"`      // URL для отправки аудита (пусто — выключен)
 	CryptoKey     string  `json:"crypto_key"`     // приватный ключ для расшифровки сообщений от клиента
+	TrustedSubnet string  `json:"trusted_subnet"` // доверенная подсеть агентов в нотации CIDR (пусто — без ограничений)
 }
 
 // NewConfigServer создаёт [ServerConfig] и регистрирует флаги командной
@@ -44,14 +45,15 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.CryptoKey, "crypto-key", "", "private key for decrypt messages from agent.")
 	flag.StringVar(&sc.AuditFile, "audit-file", "", "path to audit file.")
 	flag.StringVar(&sc.AuditURL, "audit-url", "", "url for audit.")
+	flag.StringVar(&sc.TrustedSubnet, "t", "", "trusted subnet for requests to server.")
 
 	return sc
 }
 
 // ApplyEnv переопределяет значения конфигурации переменными окружения
 // ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY,
-// AUDIT_FILE, AUDIT_URL, CONFIG, CRYPTO_KEY. Переменные имеют приоритет
-// над флагами командной строки.
+// AUDIT_FILE, AUDIT_URL, CONFIG, CRYPTO_KEY, TRUSTED_SUBNET. Переменные
+// имеют приоритет над флагами командной строки.
 //
 // Учитываются все заданные переменные, в том числе с пустым значением:
 // например, DATABASE_DSN="" переключает сервер на хранение в памяти, даже
@@ -103,6 +105,10 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envPrivateKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
 		sc.CryptoKey = envPrivateKey
+	}
+
+	if envTrustedSubnet, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
+		sc.TrustedSubnet = envTrustedSubnet
 	}
 }
 

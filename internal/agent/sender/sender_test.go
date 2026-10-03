@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -360,5 +361,52 @@ func TestSendMetricsBatch_ErrorStatus(t *testing.T) {
 	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
 	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err == nil {
 		t.Fatal("ожидалась ошибка при статусе 500, получили nil")
+	}
+}
+
+// Для сервера на loopback локальным адресом агента тоже будет loopback.
+func TestGetLocalIP_Loopback(t *testing.T) {
+	ip, err := getLocalIP("127.0.0.1:8080")
+	if err != nil {
+		t.Fatalf("getLocalIP() вернул ошибку: %v", err)
+	}
+	if !ip.IsLoopback() {
+		t.Errorf("getLocalIP() = %s, ожидался loopback-адрес", ip)
+	}
+}
+
+// Адрес без порта — ошибка, а не пустой IP.
+func TestGetLocalIP_InvalidAddr(t *testing.T) {
+	if _, err := getLocalIP("127.0.0.1"); err == nil {
+		t.Error("для адреса без порта ожидалась ошибка")
+	}
+}
+
+// Агент кладёт в X-Real-IP тот адрес, с которого сервер реально видит запрос.
+func TestSendMetricsBatch_XRealIP(t *testing.T) {
+	gv := 1.5
+	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Real-IP")
+		if got == "" {
+			t.Error("заголовок X-Real-IP не выставлен")
+		}
+
+		remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			t.Fatalf("разбор RemoteAddr %q: %v", r.RemoteAddr, err)
+		}
+		if got != remoteHost {
+			t.Errorf("X-Real-IP = %q, а сервер видит запрос с %q", got, remoteHost)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err != nil {
+		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
 }
