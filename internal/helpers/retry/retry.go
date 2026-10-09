@@ -10,6 +10,8 @@ import (
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // delays задаёт паузы перед повторными попытками: 1, 3 и 5 секунд.
@@ -18,7 +20,7 @@ var delays = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
 // Do выполняет handler и повторяет его при временной ошибке.
 //
 // Функция isRetriable определяет, считается ли ошибка временной (см.
-// [IsPGRetriable] и [IsHTTPRetriable]). Всего выполняется до четырёх
+// [IsPGRetriable], [IsHTTPRetriable] и [IsGRPCRetriable]). Всего выполняется до четырёх
 // попыток (первая плюс три повтора с паузами из delays). Ожидание паузы
 // прерывается при отмене ctx — тогда возвращается ошибка контекста.
 // Возвращается результат последней попытки.
@@ -71,4 +73,24 @@ func IsHTTPRetriable(err error) bool {
 	}
 	var netErr net.Error
 	return errors.As(err, &netErr)
+}
+
+// IsGRPCRetriable сообщает, является ли ошибка gRPC-вызова временной, то
+// есть имеет ли смысл повторить вызов. Ошибка может быть обёрнута через %w.
+//
+// Временными считаются ошибки с кодами:
+//   - [codes.Unavailable] — сервер недоступен или соединение разорвано;
+//   - [codes.DeadlineExceeded] — истёк дедлайн вызова.
+//
+// При DeadlineExceeded сервер мог успеть выполнить запрос и не успеть
+// ответить, поэтому повтор неидемпотентного вызова (например, с дельтой
+// counter) может применить его дважды. Остальные коды, в том числе
+// [codes.Canceled], временными не считаются.
+func IsGRPCRetriable(err error) bool {
+	if err == nil {
+		return false
+	}
+	isUnavailable := status.Code(err) == codes.Unavailable
+	isDeadLineExceeded := status.Code(err) == codes.DeadlineExceeded
+	return isUnavailable || isDeadLineExceeded
 }

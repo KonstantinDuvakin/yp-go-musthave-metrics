@@ -1,8 +1,10 @@
-// Package sender предназначен для отправки метрик на сервер по HTTP.
+// Package sender предназначен для отправки метрик на сервер по HTTP или gRPC.
 //
-// Пакет инкапсулирует resty-клиент и предоставляет методы для отправки
-// метрик как по URL-параметрам, так и в формате JSON (с gzip-сжатием,
-// подписью тела запроса и повторными попытками при временных ошибках).
+// Пакет инкапсулирует resty-клиент и gRPC-клиент сервиса Metrics и
+// предоставляет методы для отправки метрик как по URL-параметрам, так и в
+// формате JSON (с gzip-сжатием, подписью тела запроса и повторными
+// попытками при временных ошибках). Пакеты метрик уходят через тот
+// транспорт, который выбран при создании [Sender] (см. [NewSender]).
 package sender
 
 import (
@@ -20,44 +22,103 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/retry"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	pb "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/proto"
 	"github.com/go-resty/resty/v2"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
+
+// Transport — протокол, по которому [Sender.SendMetricsBatch] отправляет
+// пакеты метрик на сервер.
+type Transport string
+
+const (
+	// HTTP — отправка пакетов POST-запросом на эндпоинт /updates.
+	HTTP Transport = "HTTP"
+	// GRPC — отправка пакетов вызовом Metrics.UpdateMetrics.
+	GRPC Transport = "GRPC"
+)
+
+// timeoutCall — сколько агент ждёт сервер в одном обращении: таймаут
+// HTTP-запроса, дедлайн одной попытки gRPC-вызова и минимальное время на
+// установку gRPC-соединения. Паузы между повторами (см. [retry.Do]) в него
+// не входят.
+const timeoutCall = 2 * time.Second
 
 // Sender отправляет метрики на сервер сбора метрик.
 //
 // Хранит настроенный HTTP-клиент [resty.Client] с заданными базовым URL,
-// заголовками и таймаутом. Создаётся через [NewSender].
+// заголовками и таймаутом, а в gRPC-режиме ещё и соединение с
+// gRPC-сервером. Создаётся через [NewSender]; после использования
+// соединение нужно закрыть через [Sender.Close].
 type Sender struct {
-	client *resty.Client
+	client     *resty.Client
+	grpcClient pb.MetricsClient
+	grpcConn   *grpc.ClientConn
+	grpcIP     net.IP
+	transport  Transport
 }
 
-// NewSender создаёт [Sender] с готовым к работе resty-клиентом.
+// NewSender создаёт [Sender] и выбирает транспорт для пакетов метрик.
 //
-// baseURL — адрес сервера без схемы (например, "localhost:8080"); схема
-// http:// добавляется автоматически. Клиенту задаётся таймаут 2 секунды
-// и заголовок Content-Type: text/plain по умолчанию.
+// baseURL — адрес HTTP-сервера без схемы (например, "localhost:8080");
+// схема http:// добавляется автоматически. Клиенту задаётся таймаут
+// timeoutCall и заголовок Content-Type: text/plain по умолчанию.
 //
-// Во все запросы добавляется заголовок X-Real-IP с IP-адресом агента,
-// с которого уходят запросы на baseURL (см. getLocalIP). Сервер сверяет
-// его с доверенной подсетью. Если адрес определить не удалось, пишется
-// предупреждение в лог и заголовок не выставляется.
-func NewSender(baseURL string) *Sender {
+// grpcAddr — адрес gRPC-сервера в формате host:port. Если он пуст, пакеты
+// отправляются по HTTP ([HTTP]), иначе по gRPC ([GRPC]).
+//
+// Агент передаёт свой IP-адрес, чтобы сервер сверил его с доверенной
+// подсетью. Адрес определяется по маршруту до сервера выбранного
+// транспорта (см. getLocalIP): в HTTP-режиме он уходит в заголовке
+// X-Real-IP всех запросов, в gRPC-режиме — в метаданных x-real-ip. Если
+// адрес определить не удалось, пишется предупреждение в лог, и IP не
+// передаётся.
+//
+// Возвращает ошибку, если не удалось создать gRPC-клиент.
+func NewSender(baseURL, grpcAddr string) (*Sender, error) {
 	client := resty.New()
 	client.SetBaseURL("http://" + baseURL)
 	client.SetHeader("Content-Type", "text/plain")
-	client.SetTimeout(2 * time.Second)
+	client.SetTimeout(timeoutCall)
 
-	ip, err := getLocalIP(baseURL)
-	if err != nil {
-		logger.Log.Warn("Couldn't get local IP", zap.Error(err))
-	} else {
-		client.SetHeader("X-Real-IP", ip.String())
-	}
-
-	return &Sender{
+	sender := &Sender{
 		client: client,
 	}
+
+	var ip net.IP
+	var err error
+
+	if grpcAddr != "" {
+		ip, err = getLocalIP(grpcAddr)
+		if err != nil {
+			logger.Log.Warn("Couldn't get local IP for grpc", zap.Error(err))
+		}
+
+		c, conn, grpcErr := createGRPCClient(grpcAddr)
+		if grpcErr != nil {
+			return nil, grpcErr
+		}
+
+		sender.transport = GRPC
+		sender.grpcClient = c
+		sender.grpcConn = conn
+		sender.grpcIP = ip
+	} else {
+		ip, err = getLocalIP(baseURL)
+		if err != nil {
+			logger.Log.Warn("Couldn't get local IP for http", zap.Error(err))
+		} else {
+			client.SetHeader("X-Real-IP", ip.String())
+		}
+
+		sender.transport = HTTP
+	}
+
+	return sender, nil
 }
 
 // SendMetrics отправляет метрику POST-запросом по URL с параметрами в пути.
@@ -124,13 +185,40 @@ func (s *Sender) SendMetricsJSON(ctx context.Context, body models.Metrics, hashK
 	})
 }
 
-// SendMetricsBatch отправляет пакет метрик в формате JSON на эндпоинт /updates.
+// SendMetricsBatch отправляет пакет метрик одним запросом через транспорт,
+// выбранный в [NewSender].
 //
-// Работает аналогично [Sender.SendMetricsJSON], но принимает срез метрик и
-// отправляет их одним запросом: тело сжимается gzip, при непустом hashKey
-// добавляется подпись HashSHA256, а сам запрос повторяется при временных
-// ошибках. Возвращает ошибку, если сервер ответил статусом >= 400.
+// В HTTP-режиме пакет уходит в формате JSON на эндпоинт /updates: тело
+// сжимается gzip, при непустом hashKey добавляется подпись HashSHA256, при
+// непустом pubKey тело шифруется. Возвращает ошибку, если сервер ответил
+// статусом >= 400.
+//
+// В gRPC-режиме пакет уходит вызовом Metrics.UpdateMetrics; hashKey и
+// pubKey при этом не используются.
+//
+// В обоих режимах каждая попытка ограничена timeoutCall, а запрос
+// повторяется при временных ошибках (см. [retry.Do]). Отмена ctx прерывает
+// и текущую попытку, и паузу перед следующей.
 func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics, hashKey string, pubKey *rsa.PublicKey) error {
+	if s.transport == GRPC {
+		return s.sendBatchGRPC(ctx, metrics)
+	}
+	return s.sendBatchHTTP(ctx, metrics, hashKey, pubKey)
+}
+
+// Close закрывает соединение с gRPC-сервером. В HTTP-режиме ничего не
+// делает и возвращает nil.
+func (s *Sender) Close() error {
+	if s.grpcConn != nil {
+		return s.grpcConn.Close()
+	}
+	return nil
+}
+
+// sendBatchHTTP отправляет пакет метрик на эндпоинт /updates (см.
+// [Sender.SendMetricsBatch]). Повторяет запрос при временных сетевых
+// ошибках согласно [retry.IsHTTPRetriable].
+func (s *Sender) sendBatchHTTP(ctx context.Context, metrics []models.Metrics, hashKey string, pubKey *rsa.PublicKey) error {
 	var body []byte
 	bufGZip := bytes.NewBuffer(nil)
 	zw := gzip.NewWriter(bufGZip)
@@ -192,6 +280,56 @@ func (s *Sender) SendMetricsBatch(ctx context.Context, metrics []models.Metrics,
 	})
 }
 
+// sendBatchGRPC переводит метрики в [pb.Metric] и отправляет их одним
+// вызовом UpdateMetrics. Если IP агента известен, он добавляется в
+// исходящие метаданные под ключом x-real-ip.
+//
+// У каждой попытки свой дедлайн timeoutCall, производный от ctx: паузы
+// между повторами его не расходуют, а отмена ctx прерывает вызов с кодом
+// Canceled. Повторяет вызов при временных ошибках согласно
+// [retry.IsGRPCRetriable], в том числе при истечении дедлайна попытки.
+func (s *Sender) sendBatchGRPC(ctx context.Context, metrics []models.Metrics) error {
+	metricsProto := make([]*pb.Metric, 0, len(metrics))
+
+	for _, m := range metrics {
+		var mType pb.Metric_MType
+		var value float64
+		var delta int64
+
+		if m.MType == models.Gauge {
+			value = *m.Value
+			mType = pb.Metric_GAUGE
+		} else {
+			delta = *m.Delta
+			mType = pb.Metric_COUNTER
+		}
+
+		mProto := pb.Metric_builder{Id: m.ID, Delta: delta, Value: value, Type: mType}.Build()
+
+		metricsProto = append(metricsProto, mProto)
+	}
+
+	if s.grpcIP != nil {
+		md := metadata.New(map[string]string{"x-real-ip": s.grpcIP.String()})
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
+	return retry.Do(ctx, retry.IsGRPCRetriable, func() error {
+		callCtx, cancel := context.WithTimeout(ctx, timeoutCall)
+		defer cancel()
+
+		_, err := s.grpcClient.UpdateMetrics(callCtx, pb.UpdateMetricsRequest_builder{
+			Metrics: metricsProto,
+		}.Build())
+
+		if err != nil {
+			return fmt.Errorf("не удалось отправить метрики: %w", err)
+		}
+
+		return nil
+	})
+}
+
 // URLBuilder собирает относительный путь для отправки метрики через
 // [Sender.SendMetrics].
 //
@@ -218,4 +356,26 @@ func getLocalIP(serverAddr string) (net.IP, error) {
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
 	return localAddr.IP, nil
+}
+
+// createGRPCClient создаёт соединение с gRPC-сервером addr без TLS и
+// клиент сервиса Metrics поверх него.
+//
+// Соединение устанавливается лениво, при первом вызове, поэтому сервер
+// может быть ещё не запущен. Переподключение идёт с экспоненциальной
+// паузой [backoff.DefaultConfig], на одну попытку подключения отводится не
+// меньше timeoutCall.
+func createGRPCClient(addr string) (pb.MetricsClient, *grpc.ClientConn, error) {
+	var p grpc.ConnectParams
+	p.MinConnectTimeout = timeoutCall
+	p.Backoff = backoff.DefaultConfig
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(p))
+	if err != nil {
+		return nil, nil, fmt.Errorf("ошибка при установлении соединения с сервером: %w", err)
+	}
+
+	c := pb.NewMetricsClient(conn)
+
+	return c, conn, nil
 }

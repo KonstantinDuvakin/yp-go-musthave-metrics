@@ -78,7 +78,7 @@ func writeConfig(t *testing.T, name, content string) string {
 func TestParseFile(t *testing.T) {
 	t.Run("no path leaves config untouched", func(t *testing.T) {
 		setArgs(t)
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 		sc := &ServerConfig{Address: "localhost:8080"}
 
 		require.NoError(t, ParseFile(sc))
@@ -89,7 +89,7 @@ func TestParseFile(t *testing.T) {
 	t.Run("path from flag", func(t *testing.T) {
 		path := writeConfig(t, "flag.json", `{"address": "from-flag:1"}`)
 		setArgs(t, "-c", path)
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 		sc := &ServerConfig{}
 
 		require.NoError(t, ParseFile(sc))
@@ -100,7 +100,7 @@ func TestParseFile(t *testing.T) {
 	t.Run("path from long flag", func(t *testing.T) {
 		path := writeConfig(t, "flag.json", `{"address": "from-long-flag:1"}`)
 		setArgs(t, "-config", path)
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 		sc := &ServerConfig{}
 
 		require.NoError(t, ParseFile(sc))
@@ -134,7 +134,7 @@ func TestParseFile(t *testing.T) {
 	t.Run("works for agent config", func(t *testing.T) {
 		path := writeConfig(t, "agent.json", `{"poll_interval": "500ms"}`)
 		setArgs(t, "-c="+path)
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 		ac := &AgentConfig{}
 
 		require.NoError(t, ParseFile(ac))
@@ -144,14 +144,14 @@ func TestParseFile(t *testing.T) {
 
 	t.Run("missing flag value", func(t *testing.T) {
 		setArgs(t, "-c")
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 
 		assert.Error(t, ParseFile(&ServerConfig{}))
 	})
 
 	t.Run("file not found", func(t *testing.T) {
 		setArgs(t, "-c", filepath.Join(t.TempDir(), "missing.json"))
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 
 		assert.Error(t, ParseFile(&ServerConfig{}))
 	})
@@ -160,7 +160,7 @@ func TestParseFile(t *testing.T) {
 		path := writeConfig(t, "bad.json", `{"address": "x", // comment
 		}`)
 		setArgs(t, "-c", path)
-		t.Setenv("CONFIG", "")
+		clearEnv(t, "CONFIG")
 
 		assert.Error(t, ParseFile(&ServerConfig{}))
 	})

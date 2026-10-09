@@ -20,7 +20,12 @@ func ExampleSender_SendMetricsJSON() {
 	defer srv.Close()
 
 	// srv.URL имеет вид http://127.0.0.1:PORT — NewSender ждёт адрес без схемы.
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	// Пустой адрес gRPC-сервера означает отправку по HTTP.
+	s, err := NewSender(strings.TrimPrefix(srv.URL, "http://"), "")
+	if err != nil {
+		fmt.Println("ошибка:", err)
+		return
+	}
 
 	value := 42.5
 	metric := models.Metrics{ID: "Alloc", MType: models.Gauge, Value: &value}
@@ -44,7 +49,11 @@ func ExampleSender_SendMetricsBatch() {
 	}))
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s, err := NewSender(strings.TrimPrefix(srv.URL, "http://"), "")
+	if err != nil {
+		fmt.Println("ошибка:", err)
+		return
+	}
 
 	value := 42.5
 	delta := int64(10)

@@ -170,8 +170,10 @@ func TestMiddleware_WithAgentChain(t *testing.T) {
 	value := 42.5
 	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &value}}
 
-	s := sender.NewSender(strings.TrimPrefix(srv.URL, "http://"))
-	err := s.SendMetricsBatch(context.Background(), batch, hashKey, &key.PublicKey)
+	s, err := sender.NewSender(strings.TrimPrefix(srv.URL, "http://"), "")
+	require.NoError(t, err)
+
+	err = s.SendMetricsBatch(context.Background(), batch, hashKey, &key.PublicKey)
 	require.NoError(t, err)
 
 	assert.JSONEq(t, `[{"id":"Alloc","type":"gauge","value":42.5}]`, string(got))

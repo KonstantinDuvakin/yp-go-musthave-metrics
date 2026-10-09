@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var errRetriable = errors.New("retriable")
@@ -135,6 +137,31 @@ func TestIsHttpRetriable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, IsHTTPRetriable(tt.err))
+		})
+	}
+}
+
+func TestIsGRPCRetriable(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"обычная ошибка", errors.New("boom"), false},
+		{"Unavailable", status.Error(codes.Unavailable, "connection refused"), true},
+		{"обёрнутый Unavailable через %w", fmt.Errorf("send: %w", status.Error(codes.Unavailable, "down")), true},
+		{"DeadlineExceeded", status.Error(codes.DeadlineExceeded, "context deadline exceeded"), true},
+		{"обёрнутый DeadlineExceeded через %w", fmt.Errorf("send: %w", status.Error(codes.DeadlineExceeded, "timeout")), true},
+		{"Canceled", status.Error(codes.Canceled, "context canceled"), false},
+		{"PermissionDenied", status.Error(codes.PermissionDenied, "IP is not allowed"), false},
+		{"InvalidArgument", status.Error(codes.InvalidArgument, "bad metric"), false},
+		{"Internal", status.Error(codes.Internal, "storage"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, IsGRPCRetriable(tt.err))
 		})
 	}
 }

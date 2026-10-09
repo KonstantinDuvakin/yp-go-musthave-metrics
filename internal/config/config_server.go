@@ -24,6 +24,7 @@ type ServerConfig struct {
 	AuditURL      string  `json:"audit_url"`      // URL для отправки аудита (пусто — выключен)
 	CryptoKey     string  `json:"crypto_key"`     // приватный ключ для расшифровки сообщений от клиента
 	TrustedSubnet string  `json:"trusted_subnet"` // доверенная подсеть агентов в нотации CIDR (пусто — без ограничений)
+	GRPCAddress   string  `json:"grpc_address"`   // адрес прослушивания grpc сервера
 }
 
 // NewConfigServer создаёт [ServerConfig] и регистрирует флаги командной
@@ -46,6 +47,7 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.AuditFile, "audit-file", "", "path to audit file.")
 	flag.StringVar(&sc.AuditURL, "audit-url", "", "url for audit.")
 	flag.StringVar(&sc.TrustedSubnet, "t", "", "trusted subnet for requests to server.")
+	flag.StringVar(&sc.GRPCAddress, "grpc-address", "", "the address to listen on grpc requests.")
 
 	return sc
 }
@@ -109,6 +111,10 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envTrustedSubnet, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
 		sc.TrustedSubnet = envTrustedSubnet
+	}
+
+	if envGRPCAddress, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		sc.GRPCAddress = envGRPCAddress
 	}
 }
 

@@ -128,7 +128,7 @@ func TestSendMetricsJson(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+			s := newHTTPSender(t, srv.URL)
 
 			if err := s.SendMetricsJSON(context.Background(), tt.body, ""); err != nil {
 				t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
@@ -150,7 +150,7 @@ func TestSendMetricsJson_Integration(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s := newHTTPSender(t, srv.URL)
 
 	if err := s.SendMetricsJSON(context.Background(), body, ""); err != nil {
 		t.Fatalf("SendMetricsJson() вернул ошибку: %v", err)
@@ -255,7 +255,7 @@ func TestSendMetricsBatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s := newHTTPSender(t, srv.URL)
 	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestSendMetricsBatch_WithKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s := newHTTPSender(t, srv.URL)
 	if err := s.SendMetricsBatch(context.Background(), batch, key, nil); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestSendMetricsBatch_Encrypted(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s := newHTTPSender(t, srv.URL)
 	if err := s.SendMetricsBatch(context.Background(), batch, "", &privateKey.PublicKey); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestSendMetricsBatch_ErrorStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s := newHTTPSender(t, srv.URL)
 
 	gv := 1.0
 	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
@@ -405,8 +405,20 @@ func TestSendMetricsBatch_XRealIP(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewSender(strings.TrimPrefix(srv.URL, "http://"))
+	s := newHTTPSender(t, srv.URL)
 	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err != nil {
 		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
 	}
+}
+
+// newHTTPSender создаёт Sender в HTTP-режиме для тестового сервера srvURL.
+func newHTTPSender(t *testing.T, srvURL string) *Sender {
+	t.Helper()
+
+	s, err := NewSender(strings.TrimPrefix(srvURL, "http://"), "")
+	if err != nil {
+		t.Fatalf("NewSender() вернул ошибку: %v", err)
+	}
+
+	return s
 }
