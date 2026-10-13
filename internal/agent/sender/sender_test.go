@@ -415,7 +415,7 @@ func TestSendMetricsBatch_XRealIP(t *testing.T) {
 func newHTTPSender(t *testing.T, srvURL string) *Sender {
 	t.Helper()
 
-	s, err := NewSender(strings.TrimPrefix(srvURL, "http://"), "")
+	s, err := NewSender(strings.TrimPrefix(srvURL, "http://"), "", "")
 	if err != nil {
 		t.Fatalf("NewSender() вернул ошибку: %v", err)
 	}

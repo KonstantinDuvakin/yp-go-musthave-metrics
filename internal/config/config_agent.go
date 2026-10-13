@@ -23,6 +23,7 @@ type AgentConfig struct {
 	CryptoKey      string  `json:"crypto_key"`      // публичный ключ для шифрования сообщений
 	ConfigPath     string  `json:"config_path"`     // путь к файлу конфигурации
 	GRPCAddress    string  `json:"grpc_address"`    // адрес grpc сервера
+	GRPCCert       string  `json:"grpc_cert"`       // путь к PEM-сертификату gRPC-сервера, которому доверяет агент
 }
 
 // NewConfigAgent создаёт [AgentConfig] и регистрирует флаги командной
@@ -43,6 +44,7 @@ func NewConfigAgent() *AgentConfig {
 	flag.StringVar(&ac.ConfigPath, "c", "", "shorthand for flag -config.")
 	flag.StringVar(&ac.ConfigPath, "config", "", "the config file path.")
 	flag.StringVar(&ac.GRPCAddress, "grpc-address", "", "the address of grpc server.")
+	flag.StringVar(&ac.GRPCCert, "grpc-cert", "", "the certificate for grpc server.")
 
 	return ac
 }
@@ -104,6 +106,10 @@ func (ac *AgentConfig) ApplyEnv() {
 
 	if envGRPCAddress, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
 		ac.GRPCAddress = envGRPCAddress
+	}
+
+	if envGRPCCert, ok := os.LookupEnv("GRPC_CERT"); ok {
+		ac.GRPCCert = envGRPCCert
 	}
 }
 

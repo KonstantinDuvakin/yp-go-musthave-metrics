@@ -53,7 +53,7 @@ func newTestAgent(t *testing.T, h http.Handler) (*Agent, *agentstorage.AgentStor
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
 
-	send, err := sender.NewSender(strings.TrimPrefix(ts.URL, "http://"), "")
+	send, err := sender.NewSender(strings.TrimPrefix(ts.URL, "http://"), "", "")
 	require.NoError(t, err)
 
 	store := agentstorage.NewAgentStorage()

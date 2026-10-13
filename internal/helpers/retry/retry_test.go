@@ -151,8 +151,8 @@ func TestIsGRPCRetriable(t *testing.T) {
 		{"обычная ошибка", errors.New("boom"), false},
 		{"Unavailable", status.Error(codes.Unavailable, "connection refused"), true},
 		{"обёрнутый Unavailable через %w", fmt.Errorf("send: %w", status.Error(codes.Unavailable, "down")), true},
-		{"DeadlineExceeded", status.Error(codes.DeadlineExceeded, "context deadline exceeded"), true},
-		{"обёрнутый DeadlineExceeded через %w", fmt.Errorf("send: %w", status.Error(codes.DeadlineExceeded, "timeout")), true},
+		// Сервер мог успеть сохранить пакет и не успеть ответить — повтор задвоил бы counter.
+		{"DeadlineExceeded", status.Error(codes.DeadlineExceeded, "context deadline exceeded"), false},
 		{"Canceled", status.Error(codes.Canceled, "context canceled"), false},
 		{"PermissionDenied", status.Error(codes.PermissionDenied, "IP is not allowed"), false},
 		{"InvalidArgument", status.Error(codes.InvalidArgument, "bad metric"), false},

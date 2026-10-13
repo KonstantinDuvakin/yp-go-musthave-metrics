@@ -25,6 +25,8 @@ type ServerConfig struct {
 	CryptoKey     string  `json:"crypto_key"`     // приватный ключ для расшифровки сообщений от клиента
 	TrustedSubnet string  `json:"trusted_subnet"` // доверенная подсеть агентов в нотации CIDR (пусто — без ограничений)
 	GRPCAddress   string  `json:"grpc_address"`   // адрес прослушивания grpc сервера
+	GRPCCert      string  `json:"grpc_cert"`      // путь к PEM-сертификату gRPC-сервера (TLS)
+	GRPCKey       string  `json:"grpc_key"`       // путь к PEM-ключу сертификата gRPC-сервера
 }
 
 // NewConfigServer создаёт [ServerConfig] и регистрирует флаги командной
@@ -48,6 +50,8 @@ func NewConfigServer() *ServerConfig {
 	flag.StringVar(&sc.AuditURL, "audit-url", "", "url for audit.")
 	flag.StringVar(&sc.TrustedSubnet, "t", "", "trusted subnet for requests to server.")
 	flag.StringVar(&sc.GRPCAddress, "grpc-address", "", "the address to listen on grpc requests.")
+	flag.StringVar(&sc.GRPCCert, "grpc-cert", "", "the certificate for grpc server.")
+	flag.StringVar(&sc.GRPCKey, "grpc-key", "", "the key for certificate for grpc server.")
 
 	return sc
 }
@@ -115,6 +119,14 @@ func (sc *ServerConfig) ApplyEnv() {
 
 	if envGRPCAddress, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
 		sc.GRPCAddress = envGRPCAddress
+	}
+
+	if envGRPCCert, ok := os.LookupEnv("GRPC_CERT"); ok {
+		sc.GRPCCert = envGRPCCert
+	}
+
+	if envGRPCKey, ok := os.LookupEnv("GRPC_KEY"); ok {
+		sc.GRPCKey = envGRPCKey
 	}
 }
 

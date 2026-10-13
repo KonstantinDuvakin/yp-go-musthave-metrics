@@ -56,7 +56,7 @@ func main() {
 	}
 
 	store := agentstorage.NewAgentStorage()
-	send, err := sender.NewSender(c.Address, c.GRPCAddress)
+	send, err := sender.NewSender(c.Address, c.GRPCAddress, c.GRPCCert)
 	if err != nil {
 		logger.Log.Fatal("Error create sender", zap.Error(err))
 	}

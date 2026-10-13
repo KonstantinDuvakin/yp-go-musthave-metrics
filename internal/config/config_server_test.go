@@ -57,7 +57,9 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 			"database_dsn": "postgres://user@localhost/db",
 			"crypto_key": "/path/to/key.pem",
 			"trusted_subnet": "192.168.1.0/24",
-			"grpc_address": "localhost:3200"
+			"grpc_address": "localhost:3200",
+			"grpc_cert": "/path/to/grpc-cert.pem",
+			"grpc_key": "/path/to/grpc-key.pem"
 		}`
 
 		require.NoError(t, json.Unmarshal([]byte(data), sc))
@@ -70,6 +72,8 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 		assert.Equal(t, "/path/to/key.pem", sc.CryptoKey)
 		assert.Equal(t, "192.168.1.0/24", sc.TrustedSubnet)
 		assert.Equal(t, "localhost:3200", sc.GRPCAddress)
+		assert.Equal(t, "/path/to/grpc-cert.pem", sc.GRPCCert)
+		assert.Equal(t, "/path/to/grpc-key.pem", sc.GRPCKey)
 	})
 
 	t.Run("missing fields keep defaults", func(t *testing.T) {
@@ -103,7 +107,7 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 	envNames := []string{
 		"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "CONFIG", "RESTORE",
 		"DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL", "CRYPTO_KEY",
-		"TRUSTED_SUBNET", "GRPC_ADDRESS",
+		"TRUSTED_SUBNET", "GRPC_ADDRESS", "GRPC_CERT", "GRPC_KEY",
 	}
 
 	base := func() ServerConfig {
@@ -120,6 +124,8 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 			CryptoKey:     "/flag/private.pem",
 			TrustedSubnet: "10.0.0.0/8",
 			GRPCAddress:   "flag:3200",
+			GRPCCert:      "/flag/grpc-cert.pem",
+			GRPCKey:       "/flag/grpc-key.pem",
 		}
 	}
 
@@ -148,6 +154,8 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 				"CRYPTO_KEY":        "/env/private.pem",
 				"TRUSTED_SUBNET":    "192.168.1.0/24",
 				"GRPC_ADDRESS":      "env:3200",
+				"GRPC_CERT":         "/env/grpc-cert.pem",
+				"GRPC_KEY":          "/env/grpc-key.pem",
 			},
 			want: func(c *ServerConfig) {
 				c.Address = "0.0.0.0:9090"
@@ -162,6 +170,8 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 				c.CryptoKey = "/env/private.pem"
 				c.TrustedSubnet = "192.168.1.0/24"
 				c.GRPCAddress = "env:3200"
+				c.GRPCCert = "/env/grpc-cert.pem"
+				c.GRPCKey = "/env/grpc-key.pem"
 			},
 		},
 		{

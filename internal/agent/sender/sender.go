@@ -12,9 +12,11 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/crypto"
@@ -27,7 +29,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -71,6 +73,11 @@ type Sender struct {
 // grpcAddr — адрес gRPC-сервера в формате host:port. Если он пуст, пакеты
 // отправляются по HTTP ([HTTP]), иначе по gRPC ([GRPC]).
 //
+// certFile — путь к PEM-сертификату gRPC-сервера. Соединение с сервером
+// идёт по TLS, и агент доверяет только этому сертификату (самоподписанному,
+// см. cmd/certgen). Хост из grpcAddr должен быть в SAN сертификата. В
+// HTTP-режиме certFile не используется.
+//
 // Агент передаёт свой IP-адрес, чтобы сервер сверил его с доверенной
 // подсетью. Адрес определяется по маршруту до сервера выбранного
 // транспорта (см. getLocalIP): в HTTP-режиме он уходит в заголовке
@@ -78,8 +85,10 @@ type Sender struct {
 // адрес определить не удалось, пишется предупреждение в лог, и IP не
 // передаётся.
 //
-// Возвращает ошибку, если не удалось создать gRPC-клиент.
-func NewSender(baseURL, grpcAddr string) (*Sender, error) {
+// Возвращает ошибку, если не удалось создать gRPC-клиент, в том числе если
+// в gRPC-режиме certFile не задан, не читается или не содержит
+// PEM-сертификата.
+func NewSender(baseURL, grpcAddr, certFile string) (*Sender, error) {
 	client := resty.New()
 	client.SetBaseURL("http://" + baseURL)
 	client.SetHeader("Content-Type", "text/plain")
@@ -98,7 +107,7 @@ func NewSender(baseURL, grpcAddr string) (*Sender, error) {
 			logger.Log.Warn("Couldn't get local IP for grpc", zap.Error(err))
 		}
 
-		c, conn, grpcErr := createGRPCClient(grpcAddr)
+		c, conn, grpcErr := createGRPCClient(grpcAddr, certFile)
 		if grpcErr != nil {
 			return nil, grpcErr
 		}
@@ -286,8 +295,10 @@ func (s *Sender) sendBatchHTTP(ctx context.Context, metrics []models.Metrics, ha
 //
 // У каждой попытки свой дедлайн timeoutCall, производный от ctx: паузы
 // между повторами его не расходуют, а отмена ctx прерывает вызов с кодом
-// Canceled. Повторяет вызов при временных ошибках согласно
-// [retry.IsGRPCRetriable], в том числе при истечении дедлайна попытки.
+// Canceled. Повторяет вызов только при временных ошибках согласно
+// [retry.IsGRPCRetriable]. Если истёк дедлайн попытки, вызов не повторяется
+// и возвращается ошибка с кодом DeadlineExceeded: сервер мог успеть сохранить
+// пакет, и повтор задвоил бы значения counter.
 func (s *Sender) sendBatchGRPC(ctx context.Context, metrics []models.Metrics) error {
 	metricsProto := make([]*pb.Metric, 0, len(metrics))
 
@@ -358,19 +369,36 @@ func getLocalIP(serverAddr string) (net.IP, error) {
 	return localAddr.IP, nil
 }
 
-// createGRPCClient создаёт соединение с gRPC-сервером addr без TLS и
-// клиент сервиса Metrics поверх него.
+// createGRPCClient создаёт TLS-соединение с gRPC-сервером addr и клиент
+// сервиса Metrics поверх него.
+//
+// Сертификат из certFile загружается в пул доверенных корней: агент
+// принимает только сервер, предъявивший этот сертификат, а имя для проверки
+// берётся из addr. Возвращает ошибку, если файл не читается или в нём нет
+// PEM-сертификата.
 //
 // Соединение устанавливается лениво, при первом вызове, поэтому сервер
 // может быть ещё не запущен. Переподключение идёт с экспоненциальной
 // паузой [backoff.DefaultConfig], на одну попытку подключения отводится не
 // меньше timeoutCall.
-func createGRPCClient(addr string) (pb.MetricsClient, *grpc.ClientConn, error) {
+func createGRPCClient(addr, certFile string) (pb.MetricsClient, *grpc.ClientConn, error) {
 	var p grpc.ConnectParams
 	p.MinConnectTimeout = timeoutCall
 	p.Backoff = backoff.DefaultConfig
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(p))
+	caCert, err := os.ReadFile(certFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("не удалось прочитать сертификат %s: %w", certFile, err)
+	}
+
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caCert) {
+		return nil, nil, fmt.Errorf("в файле %s нет корректного PEM-сертификата", certFile)
+	}
+
+	creds := credentials.NewClientTLSFromCert(pool, "")
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithConnectParams(p))
 	if err != nil {
 		return nil, nil, fmt.Errorf("ошибка при установлении соединения с сервером: %w", err)
 	}

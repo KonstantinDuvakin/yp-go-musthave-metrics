@@ -21,7 +21,7 @@ func ExampleSender_SendMetricsJSON() {
 
 	// srv.URL имеет вид http://127.0.0.1:PORT — NewSender ждёт адрес без схемы.
 	// Пустой адрес gRPC-сервера означает отправку по HTTP.
-	s, err := NewSender(strings.TrimPrefix(srv.URL, "http://"), "")
+	s, err := NewSender(strings.TrimPrefix(srv.URL, "http://"), "", "")
 	if err != nil {
 		fmt.Println("ошибка:", err)
 		return
@@ -49,7 +49,7 @@ func ExampleSender_SendMetricsBatch() {
 	}))
 	defer srv.Close()
 
-	s, err := NewSender(strings.TrimPrefix(srv.URL, "http://"), "")
+	s, err := NewSender(strings.TrimPrefix(srv.URL, "http://"), "", "")
 	if err != nil {
 		fmt.Println("ошибка:", err)
 		return

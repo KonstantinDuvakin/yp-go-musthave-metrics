@@ -4,18 +4,24 @@ import (
 	"context"
 	"errors"
 	"net"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/tlstest"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	pb "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/proto"
+	updatemetrics "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/update_metrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -31,6 +37,46 @@ type fakeStorage struct {
 func (f *fakeStorage) SaveMetricsBatch(_ context.Context, metrics []models.Metrics) error {
 	f.saved = append(f.saved, metrics)
 	return f.err
+}
+
+// auditRecorder — AuditSender, запоминающий события аудита. Вызывается из горутин
+// gRPC-сервера, поэтому защищён мьютексом.
+type auditRecorder struct {
+	mu     sync.Mutex
+	events []models.Audit
+}
+
+func (a *auditRecorder) SendEvent(event models.Audit) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.events = append(a.events, event)
+}
+
+func (a *auditRecorder) all() []models.Audit {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]models.Audit(nil), a.events...)
+}
+
+// noAudit — заглушка AuditSender для тестов, которым аудит не важен.
+type noAudit struct{}
+
+func (noAudit) SendEvent(models.Audit) {}
+
+// newMetrics собирает Metrics поверх настоящего сервиса updatemetrics, как в main.
+func newMetrics(store storage.MetricsStorage, audit updatemetrics.AuditSender) *Metrics {
+	return NewMetrics(updatemetrics.New(store, audit))
+}
+
+// peerIP — адрес соединения, который peerCtx кладёт в контекст.
+const peerIP = "10.1.2.3"
+
+// peerCtx возвращает контекст с адресом соединения, как его заполняет
+// настоящий gRPC-сервер: вызовы UpdateMetrics в обход сервера должны его иметь.
+func peerCtx() context.Context {
+	return peer.NewContext(context.Background(), &peer.Peer{
+		Addr: &net.TCPAddr{IP: net.ParseIP(peerIP), Port: 51234},
+	})
 }
 
 func mustParseCIDR(t *testing.T, s string) *net.IPNet {
@@ -84,15 +130,23 @@ func TestCheckIPInterceptor(t *testing.T) {
 func TestMetrics_UpdateMetrics(t *testing.T) {
 	t.Run("saves batch", func(t *testing.T) {
 		store := &fakeStorage{}
-		m := NewMetrics(store)
+		audit := &auditRecorder{}
+		m := newMetrics(store, audit)
 
 		req := pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
 			pb.Metric_builder{Id: "Alloc", Type: pb.Metric_GAUGE, Value: 42.5}.Build(),
 			pb.Metric_builder{Id: "PollCount", Type: pb.Metric_COUNTER, Delta: 7}.Build(),
 		}}.Build()
 
-		_, err := m.UpdateMetrics(context.Background(), req)
+		_, err := m.UpdateMetrics(peerCtx(), req)
 		require.NoError(t, err)
+
+		events := audit.all()
+		require.Len(t, events, 1, "после сохранения пакета должно уйти одно событие аудита")
+		assert.Equal(t, []string{"Alloc", "PollCount"}, events[0].Metrics)
+		assert.NotZero(t, events[0].TS)
+		// x-real-ip в запросе нет — clientIP берёт адрес соединения без порта.
+		assert.Equal(t, peerIP, events[0].IPAddress)
 
 		require.Len(t, store.saved, 1)
 		got := store.saved[0]
@@ -122,12 +176,14 @@ func TestMetrics_UpdateMetrics(t *testing.T) {
 	for _, tt := range invalid {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &fakeStorage{}
+			audit := &auditRecorder{}
 			req := pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{tt.metric}}.Build()
 
-			_, err := NewMetrics(store).UpdateMetrics(context.Background(), req)
+			_, err := newMetrics(store, audit).UpdateMetrics(peerCtx(), req)
 
 			assert.Equal(t, codes.InvalidArgument, status.Code(err))
 			assert.Empty(t, store.saved, "некорректный пакет не должен попадать в хранилище")
+			assert.Empty(t, audit.all(), "некорректный пакет не должен попадать в аудит")
 		})
 	}
 
@@ -137,9 +193,12 @@ func TestMetrics_UpdateMetrics(t *testing.T) {
 			pb.Metric_builder{Id: "Alloc", Type: pb.Metric_GAUGE, Value: 1}.Build(),
 		}}.Build()
 
-		_, err := NewMetrics(store).UpdateMetrics(context.Background(), req)
+		audit := &auditRecorder{}
+
+		_, err := newMetrics(store, audit).UpdateMetrics(peerCtx(), req)
 
 		assert.Equal(t, codes.Internal, status.Code(err))
+		assert.Empty(t, audit.all(), "несохранённый пакет не должен попадать в аудит")
 	})
 }
 
@@ -148,15 +207,19 @@ func TestMetrics_UpdateMetrics(t *testing.T) {
 func TestMetrics_OverGRPC(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	store := &fakeStorage{}
+	audit := &auditRecorder{}
 
 	// Тот же конструктор, что использует Run, — тест проверяет боевую сборку сервера.
-	srv := NewMetrics(store).createGRPCServer(mustParseCIDR(t, "192.168.1.0/24"))
+	certFile, keyFile := tlstest.WriteCert(t)
+	srv, err := newMetrics(store, audit).createGRPCServer(mustParseCIDR(t, "192.168.1.0/24"), certFile, keyFile)
+	require.NoError(t, err)
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 
 	conn, err := grpc.NewClient("passthrough:///bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Адрес bufnet не совпадает с SAN сертификата, поэтому имя для проверки задаём явно.
+		grpc.WithTransportCredentials(clientCreds(t, certFile, "localhost")),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -189,6 +252,12 @@ func TestMetrics_OverGRPC(t *testing.T) {
 	})
 
 	assert.Len(t, store.saved, 1, "в хранилище должен попасть только запрос из доверенной подсети")
+
+	// gRPC-путь пишет аудит так же, как HTTP; IP берётся из x-real-ip.
+	events := audit.all()
+	require.Len(t, events, 1, "в аудит должен попасть только запрос из доверенной подсети")
+	assert.Equal(t, "192.168.1.10", events[0].IPAddress)
+	assert.Equal(t, []string{"Alloc"}, events[0].Metrics)
 }
 
 // blockingStorage задерживает SaveMetricsBatch, пока не закроют release.
@@ -216,22 +285,24 @@ func freeAddr(t *testing.T) string {
 }
 
 // startRun запускает Run в горутине и возвращает канал с его результатом.
-func startRun(ctx context.Context, m *Metrics, addr string) <-chan error {
+func startRun(ctx context.Context, m *Metrics, addr, certFile, keyFile string) <-chan error {
 	done := make(chan error, 1)
-	go func() { done <- m.Run(ctx, addr, nil) }()
+	go func() { done <- m.Run(ctx, addr, certFile, keyFile, nil) }()
 	return done
 }
 
-// newClient создаёт клиент к серверу на addr.
-func newClient(t *testing.T, addr string) pb.MetricsClient {
+// newClient создаёт TLS-клиент к серверу на addr, доверяющий сертификату certFile.
+func newClient(t *testing.T, addr, certFile string) pb.MetricsClient {
 	t.Helper()
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds(t, certFile, "")))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	return pb.NewMetricsClient(conn)
 }
 
 func TestMetrics_Run(t *testing.T) {
+	certFile, keyFile := tlstest.WriteCert(t)
+
 	req := pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
 		pb.Metric_builder{Id: "Alloc", Type: pb.Metric_GAUGE, Value: 1}.Build(),
 	}}.Build()
@@ -241,7 +312,7 @@ func TestMetrics_Run(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = l.Close() })
 
-		err = NewMetrics(&fakeStorage{}).Run(context.Background(), l.Addr().String(), nil)
+		err = newMetrics(&fakeStorage{}, noAudit{}).Run(context.Background(), l.Addr().String(), certFile, keyFile, nil)
 
 		assert.Error(t, err)
 	})
@@ -250,12 +321,12 @@ func TestMetrics_Run(t *testing.T) {
 		addr := freeAddr(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		done := startRun(ctx, NewMetrics(&fakeStorage{}), addr)
+		done := startRun(ctx, newMetrics(&fakeStorage{}, noAudit{}), addr, certFile, keyFile)
 
 		// WaitForReady ждёт, пока сервер начнёт принимать соединения.
 		callCtx, callCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer callCancel()
-		_, err := newClient(t, addr).UpdateMetrics(callCtx, req, grpc.WaitForReady(true))
+		_, err := newClient(t, addr, certFile).UpdateMetrics(callCtx, req, grpc.WaitForReady(true))
 		require.NoError(t, err)
 
 		cancel()
@@ -273,13 +344,13 @@ func TestMetrics_Run(t *testing.T) {
 		store := &blockingStorage{started: make(chan struct{}), release: make(chan struct{})}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		done := startRun(ctx, NewMetrics(store), addr)
+		done := startRun(ctx, newMetrics(store, noAudit{}), addr, certFile, keyFile)
 
 		callErr := make(chan error, 1)
 		go func() {
 			callCtx, callCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer callCancel()
-			_, err := newClient(t, addr).UpdateMetrics(callCtx, req, grpc.WaitForReady(true))
+			_, err := newClient(t, addr, certFile).UpdateMetrics(callCtx, req, grpc.WaitForReady(true))
 			callErr <- err
 		}()
 
@@ -307,4 +378,156 @@ func TestMetrics_Run(t *testing.T) {
 		}
 		assert.NoError(t, <-callErr, "начатый до остановки запрос должен завершиться успешно")
 	})
+}
+
+// TestMetrics_AuditIPFromConnection проверяет на настоящем TCP-порту, что без
+// доверенной подсети и без x-real-ip в аудит попадает адрес соединения без
+// порта. Через bufconn это не проверить: там адрес соединения не IP.
+func TestMetrics_AuditIPFromConnection(t *testing.T) {
+	certFile, keyFile := tlstest.WriteCert(t)
+	addr := freeAddr(t)
+	audit := &auditRecorder{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := startRun(ctx, newMetrics(&fakeStorage{}, audit), addr, certFile, keyFile)
+
+	req := pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+		pb.Metric_builder{Id: "Alloc", Type: pb.Metric_GAUGE, Value: 1}.Build(),
+	}}.Build()
+
+	callCtx, callCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer callCancel()
+	_, err := newClient(t, addr, certFile).UpdateMetrics(callCtx, req, grpc.WaitForReady(true))
+	require.NoError(t, err)
+
+	events := audit.all()
+	require.Len(t, events, 1)
+	assert.Equal(t, "127.0.0.1", events[0].IPAddress)
+
+	cancel()
+	require.NoError(t, <-done)
+}
+
+func TestClientIP(t *testing.T) {
+	withPeer := func(ctx context.Context, addr net.Addr) context.Context {
+		return peer.NewContext(ctx, &peer.Peer{Addr: addr})
+	}
+	tcp := &net.TCPAddr{IP: net.ParseIP(peerIP), Port: 51234}
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want string
+	}{
+		{
+			name: "x-real-ip wins over connection address",
+			ctx:  withPeer(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-real-ip", "192.168.1.42")), tcp),
+			want: "192.168.1.42",
+		},
+		{
+			name: "x-real-ip is normalized",
+			ctx:  withPeer(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-real-ip", "2001:DB8:0:0::1")), tcp),
+			want: "2001:db8::1",
+		},
+		{
+			name: "no x-real-ip — connection address without port",
+			ctx:  withPeer(metadata.NewIncomingContext(context.Background(), metadata.Pairs("other", "1")), tcp),
+			want: peerIP,
+		},
+		{
+			name: "invalid x-real-ip — connection address",
+			ctx:  withPeer(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-real-ip", "not-an-ip")), tcp),
+			want: peerIP,
+		},
+		{
+			name: "no metadata — connection address",
+			ctx:  withPeer(context.Background(), tcp),
+			want: peerIP,
+		},
+		{
+			name: "address without port is used as is",
+			ctx:  withPeer(context.Background(), &net.UnixAddr{Name: "bufnet", Net: "unix"}),
+			want: "bufnet",
+		},
+		{
+			name: "no metadata and no peer — empty, no panic",
+			ctx:  context.Background(),
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, clientIP(tt.ctx))
+		})
+	}
+}
+
+// clientCreds возвращает TLS-учётные данные клиента, доверяющего сертификату
+// certFile. serverName задаёт имя для проверки сертификата, если адрес
+// подключения с ним не совпадает (например, bufnet); пустая строка — брать
+// имя из адреса.
+func clientCreds(t *testing.T, certFile, serverName string) credentials.TransportCredentials {
+	t.Helper()
+	creds, err := credentials.NewClientTLSFromFile(certFile, serverName)
+	require.NoError(t, err)
+	return creds
+}
+
+// TestMetrics_RequiresTLS проверяет, что сервер принимает только TLS-клиентов,
+// доверяющих его сертификату (замечание ревьюера: без insecure).
+func TestMetrics_RequiresTLS(t *testing.T) {
+	certFile, keyFile := tlstest.WriteCert(t)
+	addr := freeAddr(t)
+	store := &fakeStorage{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := startRun(ctx, newMetrics(store, noAudit{}), addr, certFile, keyFile)
+
+	req := pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+		pb.Metric_builder{Id: "Alloc", Type: pb.Metric_GAUGE, Value: 1}.Build(),
+	}}.Build()
+
+	call := func(t *testing.T, creds credentials.TransportCredentials) error {
+		t.Helper()
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
+
+		callCtx, callCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer callCancel()
+		_, err = pb.NewMetricsClient(conn).UpdateMetrics(callCtx, req)
+		return err
+	}
+
+	// Ждём, пока сервер начнёт принимать соединения.
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer readyCancel()
+	_, err := newClient(t, addr, certFile).UpdateMetrics(readyCtx, req, grpc.WaitForReady(true))
+	require.NoError(t, err, "клиент с доверенным сертификатом должен проходить")
+
+	t.Run("plaintext client is rejected", func(t *testing.T) {
+		err := call(t, insecure.NewCredentials())
+		assert.Equal(t, codes.Unavailable, status.Code(err), "без TLS соединение не устанавливается: %v", err)
+	})
+
+	t.Run("client trusting another certificate is rejected", func(t *testing.T) {
+		otherCert, _ := tlstest.WriteCert(t)
+		err := call(t, clientCreds(t, otherCert, ""))
+		assert.Equal(t, codes.Unavailable, status.Code(err), "чужой сертификат не проходит проверку: %v", err)
+	})
+
+	assert.Len(t, store.saved, 1, "в хранилище попадает только запрос по доверенному TLS")
+
+	cancel()
+	require.NoError(t, <-done)
+}
+
+func TestMetrics_Run_MissingCertificate(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.pem")
+
+	err := newMetrics(&fakeStorage{}, noAudit{}).Run(context.Background(), freeAddr(t), missing, missing, nil)
+
+	assert.Error(t, err, "без сертификата сервер не должен стартовать")
 }

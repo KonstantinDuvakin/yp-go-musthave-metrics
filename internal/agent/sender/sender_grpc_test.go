@@ -3,10 +3,13 @@ package sender
 import (
 	"context"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/helpers/tlstest"
 	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
 	pb "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/proto"
 	"google.golang.org/grpc"
@@ -81,7 +84,7 @@ func newGRPCSender(c pb.MetricsClient, ip net.IP) *Sender {
 
 func TestNewSender_Transport(t *testing.T) {
 	t.Run("empty grpc address selects HTTP", func(t *testing.T) {
-		s, err := NewSender("127.0.0.1:8080", "")
+		s, err := NewSender("127.0.0.1:8080", "", "")
 		if err != nil {
 			t.Fatalf("NewSender() вернул ошибку: %v", err)
 		}
@@ -99,7 +102,8 @@ func TestNewSender_Transport(t *testing.T) {
 
 	t.Run("grpc address selects GRPC", func(t *testing.T) {
 		// Соединение ленивое: сервер на этом адресе не нужен.
-		s, err := NewSender("127.0.0.1:8080", "127.0.0.1:3200")
+		certFile, _ := tlstest.WriteCert(t)
+		s, err := NewSender("127.0.0.1:8080", "127.0.0.1:3200", certFile)
 		if err != nil {
 			t.Fatalf("NewSender() вернул ошибку: %v", err)
 		}
@@ -237,25 +241,28 @@ func TestSendMetricsBatch_GRPCHungCallTimesOut(t *testing.T) {
 	gv := 1.0
 	batch := []models.Metrics{{ID: "Alloc", MType: models.Gauge, Value: &gv}}
 
-	// Первая попытка зависает: её должен прервать дедлайн timeoutCall с кодом
-	// DeadlineExceeded, после паузы retry.Do вторая попытка проходит.
+	// Попытка зависает: её должен прервать дедлайн timeoutCall с кодом
+	// DeadlineExceeded. Повтора нет: сервер мог успеть сохранить пакет, и
+	// повтор задвоил бы counter.
 	fake := &fakeMetricsClient{hang: 1}
 	s := newGRPCSender(fake, net.ParseIP("10.0.0.5"))
 
 	start := time.Now()
-	if err := s.SendMetricsBatch(context.Background(), batch, "", nil); err != nil {
-		t.Fatalf("SendMetricsBatch() вернул ошибку: %v", err)
-	}
+	err := s.SendMetricsBatch(context.Background(), batch, "", nil)
+	elapsed := time.Since(start)
 
-	if fake.calls() != 2 {
-		t.Errorf("UpdateMetrics вызван %d раз, want 2: после DeadlineExceeded нужен повтор", fake.calls())
+	if status.Code(err) != codes.DeadlineExceeded {
+		t.Errorf("код ошибки = %v, want %v (err: %v)", status.Code(err), codes.DeadlineExceeded, err)
 	}
-	if elapsed := time.Since(start); elapsed < timeoutCall {
+	if fake.calls() != 1 {
+		t.Errorf("UpdateMetrics вызван %d раз, want 1: после DeadlineExceeded повторять нельзя", fake.calls())
+	}
+	if elapsed < timeoutCall {
 		t.Errorf("отправка заняла %v: зависшая попытка должна была ждать дедлайн %v", elapsed, timeoutCall)
 	}
 	// Дедлайн попытки строится от ctx, поэтому метаданные сохраняются.
-	if ip := fake.metas[1].Get("x-real-ip"); len(ip) != 1 || ip[0] != "10.0.0.5" {
-		t.Errorf("x-real-ip во второй попытке = %v, want [10.0.0.5]", ip)
+	if ip := fake.metas[0].Get("x-real-ip"); len(ip) != 1 || ip[0] != "10.0.0.5" {
+		t.Errorf("x-real-ip = %v, want [10.0.0.5]", ip)
 	}
 }
 
@@ -283,4 +290,39 @@ func TestSendMetricsBatch_GRPCCancelStopsHungCall(t *testing.T) {
 	if elapsed := time.Since(start); elapsed >= timeoutCall {
 		t.Errorf("отправка заняла %v: отмена ctx должна прерывать вызов раньше дедлайна", elapsed)
 	}
+}
+
+func TestNewSender_GRPCCertificate(t *testing.T) {
+	t.Run("missing certificate file", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing.pem")
+
+		if _, err := NewSender("127.0.0.1:8080", "127.0.0.1:3200", missing); err == nil {
+			t.Error("NewSender() без файла сертификата должен вернуть ошибку")
+		}
+	})
+
+	t.Run("empty certificate path", func(t *testing.T) {
+		if _, err := NewSender("127.0.0.1:8080", "127.0.0.1:3200", ""); err == nil {
+			t.Error("NewSender() с gRPC-адресом, но без сертификата должен вернуть ошибку: insecure не используется")
+		}
+	})
+
+	t.Run("file without PEM certificate", func(t *testing.T) {
+		bad := filepath.Join(t.TempDir(), "bad.pem")
+		if err := os.WriteFile(bad, []byte("not a certificate"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := NewSender("127.0.0.1:8080", "127.0.0.1:3200", bad); err == nil {
+			t.Error("NewSender() с некорректным PEM должен вернуть ошибку")
+		}
+	})
+
+	t.Run("http mode ignores certificate", func(t *testing.T) {
+		s, err := NewSender("127.0.0.1:8080", "", "")
+		if err != nil {
+			t.Fatalf("NewSender() в HTTP-режиме не должен требовать сертификат: %v", err)
+		}
+		_ = s.Close()
+	})
 }

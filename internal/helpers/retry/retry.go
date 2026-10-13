@@ -78,19 +78,16 @@ func IsHTTPRetriable(err error) bool {
 // IsGRPCRetriable сообщает, является ли ошибка gRPC-вызова временной, то
 // есть имеет ли смысл повторить вызов. Ошибка может быть обёрнута через %w.
 //
-// Временными считаются ошибки с кодами:
-//   - [codes.Unavailable] — сервер недоступен или соединение разорвано;
-//   - [codes.DeadlineExceeded] — истёк дедлайн вызова.
-//
-// При DeadlineExceeded сервер мог успеть выполнить запрос и не успеть
-// ответить, поэтому повтор неидемпотентного вызова (например, с дельтой
-// counter) может применить его дважды. Остальные коды, в том числе
-// [codes.Canceled], временными не считаются.
+// Временной считается только ошибка с кодом [codes.Unavailable]: сервер
+// недоступен или соединение разорвано, то есть запрос до него, как правило,
+// не дошёл. Остальные коды временными не считаются. В том числе
+// [codes.DeadlineExceeded]: сервер мог успеть выполнить запрос и не успеть
+// ответить, а повтор неидемпотентного вызова (например, с дельтой counter)
+// применил бы его дважды. И [codes.Canceled]: вызов отменил сам клиент.
 func IsGRPCRetriable(err error) bool {
 	if err == nil {
 		return false
 	}
 	isUnavailable := status.Code(err) == codes.Unavailable
-	isDeadLineExceeded := status.Code(err) == codes.DeadlineExceeded
-	return isUnavailable || isDeadLineExceeded
+	return isUnavailable
 }

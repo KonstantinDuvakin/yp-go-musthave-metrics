@@ -35,6 +35,7 @@ import (
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/metrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/send_to_audit"
+	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/update_metrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -102,6 +103,8 @@ func main() {
 	auditService := sendtoaudit.NewAuditService(c.AuditFile, c.AuditURL)
 	auditService.Start()
 
+	batchService := updatemetrics.New(store, auditService)
+
 	r := chi.NewRouter()
 	r.Route("/", func(r chi.Router) {
 		r.Use(logger.RequestLogger)
@@ -120,7 +123,7 @@ func main() {
 			r.Post(`/{type}/{name}/{value}`, updatehandler.UpdateHandler(store))
 		})
 		r.Route("/updates", func(r chi.Router) {
-			r.Post("/", updatebatchmetrics.UpdateBatchMetrics(store, auditService.SendEvent))
+			r.Post("/", updatebatchmetrics.UpdateBatchMetrics(batchService))
 		})
 		r.Route("/value", func(r chi.Router) {
 			r.Post("/", getmetricjson.GetMetricJSON(store))
@@ -140,8 +143,8 @@ func main() {
 
 	if c.GRPCAddress != "" {
 		eg.Go(func() error {
-			metricsGRPC := metrics.NewMetrics(store)
-			return metricsGRPC.Run(gctx, c.GRPCAddress, ipNet)
+			metricsGRPC := metrics.NewMetrics(batchService)
+			return metricsGRPC.Run(gctx, c.GRPCAddress, c.GRPCCert, c.GRPCKey, ipNet)
 		})
 	}
 
