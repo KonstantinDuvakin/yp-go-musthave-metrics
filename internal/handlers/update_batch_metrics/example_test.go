@@ -7,19 +7,21 @@ import (
 	"strings"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	updatemetrics "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/update_metrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage/mem_storage"
 )
 
-// Пакетное обновление метрик через эндпоинт POST /updates. Вторым аргументом
-// передаётся функция аудита, вызываемая для принятого пакета.
+// Пакетное обновление метрик через эндпоинт POST /updates. Обработчик
+// получает сервис [updatemetrics.Service], который сохраняет пакет и пишет
+// событие аудита.
 func ExampleUpdateBatchMetrics() {
 	store := memstorage.NewMemStorage()
 
-	audit := func(event models.Audit) {
+	audit := auditFunc(func(event models.Audit) {
 		fmt.Println("аудит, метрик принято:", len(event.Metrics))
-	}
+	})
 
-	srv := httptest.NewServer(UpdateBatchMetrics(store, audit))
+	srv := httptest.NewServer(UpdateBatchMetrics(updatemetrics.New(store, audit)))
 	defer srv.Close()
 
 	body := `[

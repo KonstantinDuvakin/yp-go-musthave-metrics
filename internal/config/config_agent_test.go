@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"flag"
 	"os"
 	"testing"
 
@@ -57,7 +58,9 @@ func TestAgentConfig_UnmarshalJSON(t *testing.T) {
 			"poll_interval": "500ms",
 			"report_interval": "1m",
 			"rate_limit": 3,
-			"crypto_key": "/path/to/key.pem"
+			"crypto_key": "/path/to/key.pem",
+			"grpc_address": "localhost:3200",
+			"grpc_cert": "/path/to/grpc-cert.pem"
 		}`
 
 		require.NoError(t, json.Unmarshal([]byte(data), ac))
@@ -67,6 +70,8 @@ func TestAgentConfig_UnmarshalJSON(t *testing.T) {
 		assert.Equal(t, float64(60), ac.ReportInterval)
 		assert.Equal(t, 3, ac.RateLimit)
 		assert.Equal(t, "/path/to/key.pem", ac.CryptoKey)
+		assert.Equal(t, "localhost:3200", ac.GRPCAddress)
+		assert.Equal(t, "/path/to/grpc-cert.pem", ac.GRPCCert)
 	})
 
 	t.Run("missing fields keep defaults", func(t *testing.T) {
@@ -107,7 +112,7 @@ func clearEnv(t *testing.T, names ...string) {
 }
 
 func TestAgentConfig_ApplyEnv(t *testing.T) {
-	envNames := []string{"ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT", "CRYPTO_KEY", "CONFIG"}
+	envNames := []string{"ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT", "CRYPTO_KEY", "CONFIG", "GRPC_ADDRESS", "GRPC_CERT"}
 
 	base := func() AgentConfig {
 		return AgentConfig{
@@ -118,6 +123,8 @@ func TestAgentConfig_ApplyEnv(t *testing.T) {
 			Key:            "flag-key",
 			CryptoKey:      "/flag/public.pem",
 			ConfigPath:     "/flag/config.json",
+			GRPCAddress:    "flag:3200",
+			GRPCCert:       "/flag/grpc-cert.pem",
 		}
 	}
 
@@ -141,6 +148,8 @@ func TestAgentConfig_ApplyEnv(t *testing.T) {
 				"RATE_LIMIT":      "8",
 				"CRYPTO_KEY":      "/env/public.pem",
 				"CONFIG":          "/env/config.json",
+				"GRPC_ADDRESS":    "env:3200",
+				"GRPC_CERT":       "/env/grpc-cert.pem",
 			},
 			want: func(c *AgentConfig) {
 				c.Address = "example.com:9090"
@@ -150,14 +159,17 @@ func TestAgentConfig_ApplyEnv(t *testing.T) {
 				c.RateLimit = 8
 				c.CryptoKey = "/env/public.pem"
 				c.ConfigPath = "/env/config.json"
+				c.GRPCAddress = "env:3200"
+				c.GRPCCert = "/env/grpc-cert.pem"
 			},
 		},
 		{
 			name: "empty values override strings",
-			env:  map[string]string{"KEY": "", "CRYPTO_KEY": ""},
+			env:  map[string]string{"KEY": "", "CRYPTO_KEY": "", "GRPC_ADDRESS": ""},
 			want: func(c *AgentConfig) {
 				c.Key = ""
 				c.CryptoKey = ""
+				c.GRPCAddress = ""
 			},
 		},
 		{
@@ -200,6 +212,32 @@ func TestAgentConfig_ApplyEnv(t *testing.T) {
 			want := base()
 			tt.want(&want)
 			assert.Equal(t, want, got)
+		})
+	}
+}
+
+func TestNewConfigAgent_GRPCAddressFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "default is empty (HTTP)", args: nil, want: ""},
+		{name: "flag sets address", args: []string{"-grpc-address", "localhost:3200"}, want: "localhost:3200"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// NewConfigAgent регистрирует флаги в глобальном flag.CommandLine,
+			// поэтому на время теста подменяем его чистым набором.
+			orig := flag.CommandLine
+			t.Cleanup(func() { flag.CommandLine = orig })
+			flag.CommandLine = flag.NewFlagSet("agent", flag.ContinueOnError)
+
+			ac := NewConfigAgent()
+			require.NoError(t, flag.CommandLine.Parse(tt.args))
+
+			assert.Equal(t, tt.want, ac.GRPCAddress)
 		})
 	}
 }

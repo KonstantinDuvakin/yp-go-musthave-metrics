@@ -56,7 +56,12 @@ func main() {
 	}
 
 	store := agentstorage.NewAgentStorage()
-	send := sender.NewSender(c.Address)
+	send, err := sender.NewSender(c.Address, c.GRPCAddress, c.GRPCCert)
+	if err != nil {
+		logger.Log.Fatal("Error create sender", zap.Error(err))
+	}
+	defer send.Close()
+
 	agent := New(store, send)
 
 	var pubKey *rsa.PublicKey

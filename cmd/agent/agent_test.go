@@ -53,8 +53,11 @@ func newTestAgent(t *testing.T, h http.Handler) (*Agent, *agentstorage.AgentStor
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
 
+	send, err := sender.NewSender(strings.TrimPrefix(ts.URL, "http://"), "", "")
+	require.NoError(t, err)
+
 	store := agentstorage.NewAgentStorage()
-	return New(store, sender.NewSender(strings.TrimPrefix(ts.URL, "http://"))), store
+	return New(store, send), store
 }
 
 // runAgent запускает Run в горутине и возвращает канал с его результатом.

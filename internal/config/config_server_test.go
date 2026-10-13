@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"flag"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,7 +55,11 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 			"store_interval": "500ms",
 			"store_file": "/tmp/metrics.db",
 			"database_dsn": "postgres://user@localhost/db",
-			"crypto_key": "/path/to/key.pem"
+			"crypto_key": "/path/to/key.pem",
+			"trusted_subnet": "192.168.1.0/24",
+			"grpc_address": "localhost:3200",
+			"grpc_cert": "/path/to/grpc-cert.pem",
+			"grpc_key": "/path/to/grpc-key.pem"
 		}`
 
 		require.NoError(t, json.Unmarshal([]byte(data), sc))
@@ -65,6 +70,10 @@ func TestServerConfig_UnmarshalJSON(t *testing.T) {
 		assert.Equal(t, "/tmp/metrics.db", sc.StoreFile)
 		assert.Equal(t, "postgres://user@localhost/db", sc.DB)
 		assert.Equal(t, "/path/to/key.pem", sc.CryptoKey)
+		assert.Equal(t, "192.168.1.0/24", sc.TrustedSubnet)
+		assert.Equal(t, "localhost:3200", sc.GRPCAddress)
+		assert.Equal(t, "/path/to/grpc-cert.pem", sc.GRPCCert)
+		assert.Equal(t, "/path/to/grpc-key.pem", sc.GRPCKey)
 	})
 
 	t.Run("missing fields keep defaults", func(t *testing.T) {
@@ -98,6 +107,7 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 	envNames := []string{
 		"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "CONFIG", "RESTORE",
 		"DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL", "CRYPTO_KEY",
+		"TRUSTED_SUBNET", "GRPC_ADDRESS", "GRPC_CERT", "GRPC_KEY",
 	}
 
 	base := func() ServerConfig {
@@ -112,6 +122,10 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 			AuditFile:     "/flag/audit.log",
 			AuditURL:      "http://flag/audit",
 			CryptoKey:     "/flag/private.pem",
+			TrustedSubnet: "10.0.0.0/8",
+			GRPCAddress:   "flag:3200",
+			GRPCCert:      "/flag/grpc-cert.pem",
+			GRPCKey:       "/flag/grpc-key.pem",
 		}
 	}
 
@@ -138,6 +152,10 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 				"AUDIT_FILE":        "/env/audit.log",
 				"AUDIT_URL":         "http://env/audit",
 				"CRYPTO_KEY":        "/env/private.pem",
+				"TRUSTED_SUBNET":    "192.168.1.0/24",
+				"GRPC_ADDRESS":      "env:3200",
+				"GRPC_CERT":         "/env/grpc-cert.pem",
+				"GRPC_KEY":          "/env/grpc-key.pem",
 			},
 			want: func(c *ServerConfig) {
 				c.Address = "0.0.0.0:9090"
@@ -150,7 +168,16 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 				c.AuditFile = "/env/audit.log"
 				c.AuditURL = "http://env/audit"
 				c.CryptoKey = "/env/private.pem"
+				c.TrustedSubnet = "192.168.1.0/24"
+				c.GRPCAddress = "env:3200"
+				c.GRPCCert = "/env/grpc-cert.pem"
+				c.GRPCKey = "/env/grpc-key.pem"
 			},
+		},
+		{
+			name: "empty TRUSTED_SUBNET disables subnet check",
+			env:  map[string]string{"TRUSTED_SUBNET": ""},
+			want: func(c *ServerConfig) { c.TrustedSubnet = "" },
 		},
 		{
 			name: "zero STORE_INTERVAL enables sync mode",
@@ -192,6 +219,32 @@ func TestServerConfig_ApplyEnv(t *testing.T) {
 			want := base()
 			tt.want(&want)
 			assert.Equal(t, want, got)
+		})
+	}
+}
+
+func TestNewConfigServer_GRPCAddressFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "default is empty (gRPC disabled)", args: nil, want: ""},
+		{name: "flag sets address", args: []string{"-grpc-address", ":3200"}, want: ":3200"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// NewConfigServer регистрирует флаги в глобальном flag.CommandLine,
+			// поэтому на время теста подменяем его чистым набором.
+			orig := flag.CommandLine
+			t.Cleanup(func() { flag.CommandLine = orig })
+			flag.CommandLine = flag.NewFlagSet("server", flag.ContinueOnError)
+
+			sc := NewConfigServer()
+			require.NoError(t, flag.CommandLine.Parse(tt.args))
+
+			assert.Equal(t, tt.want, sc.GRPCAddress)
 		})
 	}
 }

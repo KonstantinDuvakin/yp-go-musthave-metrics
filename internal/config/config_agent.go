@@ -22,6 +22,8 @@ type AgentConfig struct {
 	Key            string  `json:"key"`             // ключ для подписи запросов (пусто — без подписи)
 	CryptoKey      string  `json:"crypto_key"`      // публичный ключ для шифрования сообщений
 	ConfigPath     string  `json:"config_path"`     // путь к файлу конфигурации
+	GRPCAddress    string  `json:"grpc_address"`    // адрес grpc сервера
+	GRPCCert       string  `json:"grpc_cert"`       // путь к PEM-сертификату gRPC-сервера, которому доверяет агент
 }
 
 // NewConfigAgent создаёт [AgentConfig] и регистрирует флаги командной
@@ -36,11 +38,13 @@ func NewConfigAgent() *AgentConfig {
 	flag.IntVar(&ac.RateLimit, "l", 5, "rate limit for outcoming requests.")
 	flag.Float64Var(&ac.PollInterval, "p", 2, "defined poll interval duration.")
 	flag.Float64Var(&ac.ReportInterval, "r", 10, "defined report interval duration.")
-	flag.StringVar(&ac.Address, "a", "localhost:8080", "The address to listen on for HTTP requests.")
+	flag.StringVar(&ac.Address, "a", "localhost:8080", "the address to listen on for HTTP requests.")
 	flag.StringVar(&ac.Key, "k", "", "key for hash.")
 	flag.StringVar(&ac.CryptoKey, "crypto-key", "", "public key for encrypt agent messages to server.")
 	flag.StringVar(&ac.ConfigPath, "c", "", "shorthand for flag -config.")
 	flag.StringVar(&ac.ConfigPath, "config", "", "the config file path.")
+	flag.StringVar(&ac.GRPCAddress, "grpc-address", "", "the address of grpc server.")
+	flag.StringVar(&ac.GRPCCert, "grpc-cert", "", "the certificate for grpc server.")
 
 	return ac
 }
@@ -98,6 +102,14 @@ func (ac *AgentConfig) ApplyEnv() {
 
 	if envConfigPath, ok := os.LookupEnv("CONFIG"); ok {
 		ac.ConfigPath = envConfigPath
+	}
+
+	if envGRPCAddress, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		ac.GRPCAddress = envGRPCAddress
+	}
+
+	if envGRPCCert, ok := os.LookupEnv("GRPC_CERT"); ok {
+		ac.GRPCCert = envGRPCCert
 	}
 }
 

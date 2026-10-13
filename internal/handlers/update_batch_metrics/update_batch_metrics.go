@@ -1,55 +1,76 @@
 // Package updatebatchmetrics содержит HTTP-обработчик пакетного обновления
-// метрик и записи события аудита о принятом пакете.
+// метрик. Сохранение и аудит выполняет сервисный слой (updatemetrics),
+// обработчик только разбирает JSON и передаёт пакет ему.
 package updatebatchmetrics
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"net/http"
-	"time"
 
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/middlewares/logger"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage"
 	"go.uber.org/zap"
 )
 
-// UpdateBatchMetrics возвращает обработчик POST /updates, сохраняющий пакет
-// метрик из JSON-тела запроса (срез [models.Metrics]) одним вызовом.
+// batchUpdater — то, что нужно обработчику от сервисного слоя: принять
+// пакет метрик от отправителя ip. Реализуется updatemetrics.Service.
+type batchUpdater interface {
+	UpdateBatch(ctx context.Context, metrics []models.Metrics, ip string) error
+}
+
+// UpdateBatchMetrics возвращает обработчик POST /updates. Он разбирает
+// JSON-тело запроса (срез [models.Metrics]) и передаёт пакет в
+// batchService.UpdateBatch вместе с IP отправителя (см. clientIP);
+// сохранение и запись аудита выполняет сервис.
 //
-// После успешного сохранения вызывает auditFunc с событием [models.Audit],
-// содержащим время, имена метрик и адрес отправителя. Отвечает 200 при
-// успехе, 400 при некорректном JSON, 500 при ошибке хранилища.
-func UpdateBatchMetrics(store storage.MetricsStorage, auditFunc func(event models.Audit)) http.HandlerFunc {
+// Отвечает 200 при успехе, 400 при некорректном JSON (сервис при этом не
+// вызывается), 500 при ошибке сервиса.
+func UpdateBatchMetrics(batchService batchUpdater) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req []models.Metrics
 
 		dec := json.NewDecoder(r.Body)
 
 		if err := dec.Decode(&req); err != nil {
-			rw.WriteHeader(http.StatusBadRequest)
-			rw.Write([]byte("Invalid json"))
+			http.Error(rw, "Invalid json", http.StatusBadRequest)
 			return
 		}
 
-		if err := store.SaveMetricsBatch(r.Context(), req); err != nil {
-			logger.Log.Error("Failed to save metrics batch: ", zap.Error(err))
-			rw.WriteHeader(http.StatusInternalServerError)
-			rw.Write([]byte("Couldn't save metrics batch"))
+		ip := clientIP(r)
+
+		err := batchService.UpdateBatch(r.Context(), req, ip)
+		if err != nil {
+			logger.Log.Error("Не удалось сохранить метрики", zap.Error(err))
+			http.Error(rw, "Couldn't save metrics batch", http.StatusInternalServerError)
 			return
 		}
-
-		event := models.Audit{
-			TS:        time.Now().UnixMilli(),
-			Metrics:   make([]string, 0, len(req)),
-			IPAddress: r.RemoteAddr,
-		}
-
-		for _, el := range req {
-			event.Metrics = append(event.Metrics, el.ID)
-		}
-
-		auditFunc(event)
 
 		rw.WriteHeader(http.StatusOK)
 	}
+}
+
+// clientIP возвращает IP отправителя для аудита: значение заголовка
+// X-Real-IP, который выставляет агент, в нормализованной записи
+// (net.ParseIP), а если заголовка нет или он некорректен — адрес соединения
+// (r.RemoteAddr) без порта. Адрес без порта возвращается как есть.
+//
+// То же правило, что у gRPC-версии в пакете metrics. Функция не возвращает
+// ошибку и ничего не логирует: отсутствие или некорректность заголовка —
+// штатный случай.
+func clientIP(r *http.Request) string {
+	ipRaw := r.Header.Get("X-Real-IP")
+
+	if ipRaw != "" {
+		if ip := net.ParseIP(ipRaw); ip != nil {
+			return ip.String()
+		}
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

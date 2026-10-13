@@ -6,7 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	models "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/model"
+	updatemetrics "github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/service/update_metrics"
 	"github.com/KonstantinDuvakin/yp-go-musthave-metrics/internal/storage/server_storage/mem_storage"
 )
 
@@ -14,8 +15,8 @@ import (
 // пакета метрик, сохранение и формирование события аудита.
 func BenchmarkUpdateBatchMetrics(b *testing.B) {
 	store := memstorage.NewMemStorage()
-	noopAudit := func(models.Audit) {}
-	handler := UpdateBatchMetrics(store, noopAudit)
+	noopAudit := auditFunc(func(models.Audit) {})
+	handler := UpdateBatchMetrics(updatemetrics.New(store, noopAudit))
 
 	body := []byte(`[
 		{"id":"Alloc","type":"gauge","value":42.5},
